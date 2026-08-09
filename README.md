@@ -577,6 +577,52 @@ could change the arithmetic.
 
 ---
 
+## A note on measuring these changes
+
+Four separate configurations in this work benchmarked **faster while computing
+wrong results**, three of them by a wide margin:
+
+| config | apparent gain | reality |
+|---|---|---|
+| `I=64` alone | +29% | 362 + 637 test failures |
+| `nthreads=256` alone | +23% | 11 + 595 test failures |
+| `nthreads=384 / I=96` | +2% | fails every quant type |
+| `MMQ_ITER_K=512` | +25% | 263 + 541 test failures |
+
+The fastest number measured in the entire session was wrong. Anything that
+breaks a tiling invariant does less work, and doing less work looks exactly like
+an optimisation on a throughput chart.
+
+Two practical consequences:
+
+1. **`test-backend-ops -o MUL_MAT` / `MUL_MAT_ID` / `SSM_SCAN` before any
+   benchmark is believed**, then generated tokens at `temperature 0` on top.
+2. **Count failures with a plain `grep FAIL`.** The harness prints them as
+   `[MUL_MAT] ERR = 0.128 > 0.0005   MUL_MAT(...): FAIL` — a pattern anchored to
+   leading whitespace matches nothing and reports a clean run for a broken
+   build. That happened here and briefly cleared a config that was in fact fine,
+   but the same mistake in the other direction is what ships corruption.
+
+---
+
+## Tested and rejected (change sets 6–7)
+
+| change | result |
+|---|---|
+| Force MMQ for the dense FP16 GEMMs — tested **three times** as the premise changed (before the stream-k fix, after it, and again after the tile retune made MMQ ~7% faster) | −6.5%, −10.5%, then −9.2%. rocBLAS wins these shapes regardless of how MMQ is tuned. Closed. |
+| `J=128` / `J=96` CDNA entries | −26% / −22%, both correct |
+| `occupancy` 2 or 4 | flat at 512 threads (LLVM clamps it); `occupancy=4` is −50% |
+| `nthreads=384 / I=96` | numerically wrong |
+| `MMQ_ITER_K=512` | numerically wrong |
+| `-ub` 512 / 1024 / 4096 | 1871 / 2335 / 2388 vs 2564 at 2048 — 2048 still optimal after all kernel changes |
+| `-b` 2048 / 4096 / 8192 | 2574 / 2567 / 2570 — no effect |
+| `-ctk f16 -ctv f16` instead of `q8_0` | 2584 vs 2590 — no prefill difference, so `q8_0` stays for the memory saving at long context |
+| `stream_k=true` **re-tested** after the `I=128→64` retune doubled the tile count | 1485 / 1947 vs 2011 / 2590 — still far worse, so the retune does not change that conclusion |
+| `J=96` at `I=32` (keeps 2 workgroups/CU where `I=64` drops to 1) | 1566 / 2041 — still worse; the mean expert width of 88 does not rescue it |
+| uneven `-ts` split across the two cards | model fails to load; the even layer split is effectively forced |
+
+---
+
 ## Base commit
 
 Change sets **1-3** are generated against the `TheTom/llama-cpp-turboquant`
