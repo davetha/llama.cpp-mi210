@@ -1030,7 +1030,58 @@ this is geometry, not implementation quality. Any project here is about
 | MoE expert path 30% faster | 12.5% | ~+14% |
 | MoE expert path 50% faster | 20.9% | ~+26% |
 
-### Option 1 — grouped / fused MoE GEMM  *(highest yield)*
+### Option 1 — grouped / fused MoE GEMM  *~~(highest yield)~~ ALREADY EXISTS*
+
+**Do not build this.** `ggml_cuda_mul_mat_id` already makes a single kernel
+launch with grid `(nty, ntx, n_experts)`; each block reads
+`expert_bounds[zt]`/`[zt+1]` for its expert and writes through `ids_dst`. That
+is one grouped GEMM over all experts with a shared tiling strategy — the thing
+described below as unbuilt. The +14–26% estimate assumed a per-expert dispatch
+that is not in this codebase.
+
+### What the same code does show: the grid is over-provisioned ~16x
+
+For `ffn_down_exps` `[2688, 1024, 512]` at ubatch 2048 with `I=64`, `J=64`:
+
+| | |
+|---|---:|
+| grid | `(16, 32, 512)` = **262,144 blocks** |
+| tiles an expert actually needs | `ceil(88/64)` = **2** of 32 `jt` slices |
+| useful blocks | `16 x 2 x 512` = **16,384** |
+
+So ~94% of blocks find `jt*J >= col_diff`, do nothing and retire. `ntx` comes
+from `ncols_max`, the worst case where every token routes to one expert, so the
+grid is provisioned for a distribution that never occurs — every launch, every
+MoE layer, every ubatch.
+
+This also explains the `ncols_typical` regression recorded above: J=48 raised
+`ntx` from 32 to 43 and so added *more* empty blocks. That result was read as
+"narrow tiles lose"; the mechanism was block count, and the tile width was
+incidental.
+
+**The fix** is to make `jt` a grid-stride loop rather than a grid dimension:
+
+```c
+for (int jt = blockIdx.y; jt*J < col_diff; jt += gridDim.y) { ... }
+```
+
+Correctness then comes from the loop condition against `col_diff`, not from the
+grid being large enough — so the grid can be sized for the typical case and an
+expert drawing far more than its share is still handled. That is exactly the
+property `tools/rejected/patch_mmq_mmid_ncols_max.py` lacked, which is why it
+produced 158 failures. It is also what upstream's stream-k decomposition exists
+to solve; change set 5 disabled stream-k on CDNA for +33.7%, removing the
+load-balancing along with whatever was hurting.
+
+**Measure before building.** Empty blocks retire after a shared-memory load and
+a `__syncthreads()` — cheap individually, roughly 262M of them per 16k prefill.
+Whether that is meaningful time is a measurement, not a derivation. Three
+predictions in this project were wrong today by reading a profile share as if it
+were traffic; this one should not be the fourth.
+
+### Superseded rationale for Option 1
+
+
 
 One kernel covering all experts with a shared tiling strategy, rather than the
 current per-expert dispatch. This is what vLLM's AITER path does, and is the
