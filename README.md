@@ -290,7 +290,102 @@ flat between 128 and 192 and falls off sharply either side.
 
 ---
 
-## Combined result (change sets 4–7)
+### 8. Dispatch `mm_ids_helper`'s fast path for top-22 routing  → [`patches/08-mmid-generalize-neu-padded.patch`](patches/08-mmid-generalize-neu-padded.patch)
+
+**+1.7% prompt processing.**
+
+`ggml_cuda_launch_mm_ids_helper` only dispatched the specialised kernel for
+`n_expert_used ∈ {2, 4, 6, 8, 16, 32}`. Nemotron-3-Super routes **top-22 of 512
+experts**, so 22 missed the list and every MoE matmul ran the generic
+`mm_ids_helper<0>` — 6.7% of prefill GPU time (359 ms over 320 calls).
+
+The two paths differ structurally:
+
+```c
+generic:      for (int it = 0; it < n_tokens; ++it)                     // 1 token/iter
+specialised:  for (int it0 = 0; it0 < n_tokens; it0 += warp_size/neu_padded)
+```
+
+`it_compact` is loop-carried, so the generic version is a 2048-iteration
+dependency chain of memory round trips with 22 of 64 lanes active. At 1.12 ms
+per call that is ~547 ns per iteration — about one uncached round trip, i.e.
+latency-bound rather than bandwidth-bound.
+
+Only the padding logic blocked it:
+
+```c
+static_assert(n_expert_used == 6 || warp_size % n_expert_used == 0, "bad n_expert_used");
+const int neu_padded = n_expert_used == 6 ? 8 : n_expert_used;
+```
+
+`neu_padded` was hardcoded with a special case for 6, and the assert was written
+against the **unpadded** count — but nothing requires the unpadded count to
+divide anything. The shuffle scan steps by `neu_padded` and
+`warp_reduce_any<neu_padded>` needs a power of two dividing `warp_size`. Both
+are now generic: next power of two, asserted against the padded width. For 22
+that gives `neu_padded = 32` → 2 tokens per iteration on a 64-wide wavefront.
+
+**Backwards compatible**: `next_pow2` of every already-dispatched value is
+itself (2, 4, 8, 16, 32), and 6 still pads to 8, so no supported configuration
+changes behaviour. The kernel body was already padding-correct — the
+`iex < n_expert_used` guard gives padded lanes `expert_used = INT_MAX`, which
+never matches and contributes nothing to `nex_prev`.
+
+| | before | after |
+|---|---:|---:|
+| `mm_ids_helper` | 359 ms (`<0>`) | **254 ms** (`<22>`) |
+| pp4096 | 2011 t/s | **2045 t/s** |
+| pp16384 | 2590 t/s | **2634 t/s** (+1.7%) |
+
+Adding any other expert count whose next power of two divides the warp is one
+more `case` line and one more template instantiation.
+
+---
+
+### 9. Materialise the Mamba-2 conv transpose  → [`patches/09-mamba-conv-concat-cont.patch`](patches/09-mamba-conv-concat-cont.patch)
+
+**+0.2% — kept, but well below what the model predicted. Read the caveat.**
+
+`mamba-base.cpp` builds the conv input as
+
+```c
+ggml_tensor * conv_x = ggml_concat(ctx0, conv, ggml_transpose(ctx0, xBC), 0);
+```
+
+`ggml_transpose` only rewrites strides, so src1 is non-contiguous and
+`concat_cuda` falls into the branch upstream itself labels
+`// non-contiguous kernel (slow)`. There, consecutive threads read
+`src1 + (i0-ne00)*nb10` at the original row stride — roughly one useful dword
+per cache line. Measured: 171 ms over 160 calls (3.2%).
+
+Wrapping the transpose in `ggml_cont` removes that kernel:
+
+| | before | after |
+|---|---:|---:|
+| `concat_non_cont` | 171 ms | — |
+| `cpy_scalar` | — | 122 ms |
+| net | | **−49 ms** |
+
+**Why it under-delivered.** The plan was for `ggml_cont` to hit
+`cpy_scalar_transpose`, a 32×32 LDS-tiled copy. It doesn't. `can_be_transposed`
+requires `nb01 == elt_size` **and** `nb02 == ne00*ne01*elt_size`, and `xBC` is a
+strided view into `zxBCdt`, so the second condition fails and the copy lands on
+the generic `cpy_scalar`. Reaching the tiled path would mean materialising `xBC`
+first, which trades the saving straight back.
+
+End to end this is 2634 → 2640 t/s, about +0.2% — near measurement noise, not
+the ~2.6% a read-amplification model predicted. Kept because it is one line,
+numerically neutral, and removes a kernel upstream calls slow; recorded honestly
+because the estimate was wrong.
+
+**Blast radius**: `mamba-base.cpp` is backend-agnostic graph construction, so
+this adds an explicit materialisation for *every* backend, not just HIP. On a
+backend whose concat already handles strided input well it is pure cost. Anyone
+upstreaming this should gate on the backend or fix the concat kernel instead.
+
+---
+
+## Combined result (change sets 4–9)
 
 `llama-bench`, 2× MI210, Nemotron-3-Super-120B-A12B `i1-Q4_K_M`,
 `-b 4096 -ub 2048 -fa 1 -sm layer -ctk q8_0 -ctv q8_0 -t 24`:
@@ -302,38 +397,73 @@ flat between 128 and 192 and falls off sharply either side.
 | + stream-k off, K-quants (5) | 1684 | 2192 | +23.5% |
 | + stream-k off, all types (5) | 1834 | 2374 | +33.7% |
 | + MMQ tile retune (6) | 1962 | 2529 | +42.5% |
-| **+ SSD chunk 128 (7)** | **2013** | **2590** | **+45.9%** |
+| + SSD chunk 128 (7) | 2013 | 2590 | +45.9% |
+| + `mm_ids_helper<22>` (8) | 2045 | 2634 | +48.4% |
+| **+ conv concat cont (9)** | **2048** | **2640** | **+48.7%** |
 
-Total GPU kernel time at pp4096 fell from 7703 ms to 5331 ms (−31%).
+Total GPU kernel time at pp4096: **7703 ms → 5129 ms (−33%)**.
 
-vLLM with its AITER fast paths reaches 4,070 t/s at 16k on the same hardware
-with an AWQ-INT4 Nemotron. The gap narrows from **2.29× to 1.57×**. Still open.
+Gap to vLLM+AITER (4,070 t/s at 16k): **2.29× → 1.54×**. Still open.
 
-### Scaling to long prefill
+### Profile at pp4096 after change sets 4–9
 
-The gains hold as the prompt grows, which is the case that actually matters for
-long-context work:
-
-| prefill | t/s |
-|---|---:|
-| pp4096 | 2013 |
-| pp16384 | 2590 |
-| pp32768 | **2640** |
-| pp65536 | 2530 |
-
-Throughput is flat-to-rising out to 64k rather than degrading, so a 256k-token
-prefill projects to roughly 100-110 s.
-
-### Profile evolution (pp4096)
-
-| | upstream | after 4–7 |
+| kernel | share | ms |
 |---|---:|---:|
-| total GPU kernel time | 7703 ms | 5331 ms |
-| SSM scan | 22.8% (1759 ms) | 1.3% (68 ms) |
-| quantized GEMM (MMQ) | 45.2% | 42.4% (2260 ms) |
-| rocBLAS `Cijk_*_HSS_*` | ~13% | ~18% (959 ms) |
-| `mm_ids_helper` | 4.5% | 6.7% (359 ms) |
-| flash attention | 0.9% | 1.3% |
+| `mul_mat_q<Q4_K,64>` | 22.1% | 1132 |
+| `mul_mat_q<Q5_0,64>` | 10.7% | 548 |
+| rocBLAS `Cijk_..._MT256x160x64` | 9.4% | 483 |
+| `mul_mat_q<Q8_0,64>` | 9.0% | 463 |
+| rocBLAS `Cijk_..._MT160x128x64` | 6.8% | 350 |
+| `mm_ids_helper<22>` | 5.0% | 254 |
+| `ssm_ssd_pre_matmul` | 3.2% | 165 |
+| `unary_op_kernel<relu_sqr>` | 2.8% | 143 |
+| `convert_unary<f32,f16>` | 2.7% | 140 |
+| `dequantize_block_q4_K<f16>` | 2.7% | 136 |
+| `cpy_scalar` | 2.4% | 122 |
+
+MMQ is ~42%; the rocBLAS dense path plus the conversions feeding it is ~23%.
+
+---
+
+## Where the remaining headroom is
+
+The dense FP16 GEMMs are the largest untouched block. `dequantize_block_q4_K`
+and `convert_unary` are not independent kernels — they are
+`ggml_cuda_mul_mat_cublas_impl` dequantising weights to fp16 and converting
+activations, feeding `cublasGemmEx(..., CUDA_R_16F, ..., CUBLAS_COMPUTE_32F)`,
+which is exactly Tensile's `Cijk_..._HSS_BH` naming. So the real cost of the
+rocBLAS path is **959 + 273 = 1232 ms (23%)**, not the 18% the GEMM kernels
+alone suggest.
+
+Routing them to MMQ instead has now been tested **twice** — before and after the
+stream-k fix — at −6.5% and −10.5%. rocBLAS genuinely wins these shapes. Any
+further gain there needs a different GEMM, not different routing. The untried
+option is per-shape Tensile tuning: `ROCBLAS_LAYER=4` emits a yaml of chosen
+solution indices, `rocblas-gemm-tune` searches better ones, and
+`ROCBLAS_TENSILE_GEMM_OVERRIDE_PATH` installs the result. (Documented for ROCm
+5.7.1; not verified to survive unchanged in 7.x.)
+
+Weights are re-dequantised once per ubatch, every ubatch. No upstream dequant
+cache exists — it would cost 2× model size in VRAM, which is presumably why.
+
+Upstream PRs worth watching, none of which help as-is:
+
+- [#24546](https://github.com/ggml-org/llama.cpp/pull/24546) — MoE-aware N-tile
+  picker. Computes `ncols_typical = 88` for this model but only applies it when
+  `ncols_typical < J_max`; with CDNA's `J_max = 64` the branch never fires.
+- [#25952](https://github.com/ggml-org/llama.cpp/pull/25952) — fused MoE expert
+  reduction, +3.6–7.1% prefill measured. Handles `k = 2..15`; **top_k = 22
+  exceeds the cap** and falls back.
+- [#26592](https://github.com/ggml-org/llama.cpp/pull/26592) — enables hipCUB on
+  HIP by reordering includes to dodge the `__trap` collision. Successor to the
+  stalled #26388. Would unblock `USE_CUB` in `ssm-scan.cu`.
+- [#26621](https://github.com/ggml-org/llama.cpp/pull/26621) — L2 cache-set
+  aliasing when packed row size is a multiple of 2048 B; up to 20% on RDNA3.5,
+  untested on CDNA2. The dequantised fp16 buffers feeding rocBLAS alias whenever
+  `ne00 % 1024 == 0`.
+- [#26294](https://github.com/ggml-org/llama.cpp/pull/26294) — fixes a real
+  duplicate-expert-id race in `mm_ids_helper` producing uninitialised `ids_dst`.
+  Worth reading against the unexplained multi-GPU fault documented above.
 
 ---
 
@@ -377,6 +507,9 @@ Two practical consequences:
 | `-ub` 512 / 1024 / 4096 | 1871 / 2335 / 2388 vs 2564 at 2048 — 2048 still optimal after all kernel changes |
 | `-b` 2048 / 4096 / 8192 | 2574 / 2567 / 2570 — no effect |
 | `-ctk f16 -ctv f16` instead of `q8_0` | 2584 vs 2590 — no prefill difference, so `q8_0` stays for the memory saving at long context |
+| `stream_k=true` **re-tested** after the `I=128→64` retune doubled the tile count | 1485 / 1947 vs 2011 / 2590 — still far worse, so the retune does not change that conclusion |
+| `J=96` at `I=32` (keeps 2 workgroups/CU where `I=64` drops to 1) | 1566 / 2041 — still worse; the mean expert width of 88 does not rescue it |
+| uneven `-ts` split across the two cards | model fails to load; the even layer split is effectively forced |
 
 ---
 
@@ -389,13 +522,13 @@ fork at:
 c26cbdffcf6fc9b7430cd6b117757e9a3f70b7ea  Merge pull request #225 from TheTom/fix-ui-assets-partial-dist
 ```
 
-Change sets **4-7** are generated against **upstream `ggml-org/llama.cpp`** at:
+Change sets **4-9** are generated against **upstream `ggml-org/llama.cpp`** at:
 
 ```
 67b9b0e7f6ce45d929a4411907d3c48ec719e81c  llama-arch: fix DeepSeek4 APE tensor op (#25945)
 ```
 
-These are different bases. Change sets 4-7 were developed and measured on the
+These are different bases. Change sets 4-9 were developed and measured on the
 upstream tree, **not** on the TurboQuant fork, and have not been tested there —
 `ssm-scan.cu` in particular changed substantially upstream in the interim, so
 expect `patches/04-*` to need rebasing before it applies to the fork. The two
@@ -415,7 +548,7 @@ git apply 03-turboquant-wave64-fixes.patch
 # build for gfx90a (see BUILD.md)
 ```
 
-Change sets 4-7 target upstream llama.cpp instead (see "Base commit" above):
+Change sets 4-9 target upstream llama.cpp instead (see "Base commit" above):
 
 ```bash
 git clone https://github.com/ggml-org/llama.cpp.git
@@ -425,6 +558,8 @@ git apply patches/04-ssd-mamba2-prefill-cdna.patch
 git apply patches/05-mmq-cdna-no-streamk.patch
 git apply patches/06-mmq-cdna-tile-retune.patch
 git apply patches/07-ssd-chunk-size-cdna.patch
+git apply patches/08-mmid-generalize-neu-padded.patch
+git apply patches/09-mamba-conv-concat-cont.patch
 cmake -B build -DGGML_HIP=ON -DAMDGPU_TARGETS=gfx90a -DGGML_HIP_MMQ_MFMA=ON \
       -DCMAKE_BUILD_TYPE=Release
 cmake --build build --target llama-bench llama-server test-backend-ops -j
