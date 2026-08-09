@@ -1096,6 +1096,27 @@ land at 40-60% of rocBLAS. **Do Option 1 first.**
 | per-expert `ncols_max` for MoE tile width ([`tools/rejected/patch_mmq_mmid_ncols_max.py`](tools/rejected/patch_mmq_mmid_ncols_max.py)) | **158 MUL_MAT_ID failures.** `ncols_max` also sizes the launch grid (`ntx = ceil(ncols_max / J)`), so it is a genuine worst-case bound, not a hint. Caught by the gate *before* benchmarking — an under-covered grid does less work and would have looked like a win |
 | CUDA graphs for large-batch `MUL_MAT_ID` ([`[TAG_MUL_MAT_ID_CUDA_GRAPHS]`](https://github.com/ggml-org/llama.cpp/pull/18958)) | not attempted: one stream sync per MoE layer per ubatch is ~400 syncs on a 16k prefill, low single-digit **ms** against ~6 s of work. Graphs already work at decode, where `ne2` takes the mmvq path |
 | smaller MMQ tiles for `n=88` | not a missing width — CDNA already offers J = 16/32/48/64 and `mul_mat_q_switch_J` picks adaptively. The chooser is correctly given the worst-case bound; see the row above |
+| separate `ncols_typical` for tile width ([`tools/rejected/patch_mmq_ncols_typical.py`](tools/rejected/patch_mmq_ncols_typical.py)) | **correct but slower: pp2048 −0.9%, pp16384 −3.3%.** 0 failures on MUL_MAT_ID and MUL_MAT — the grid still spans `ncols_max`, only the tile width moves. J=48 costs 43 blocks against J=64's 32, and that ~34% block increase outweighs the column waste it reclaims |
+
+**The tile-width question is now closed from both directions.** J=96 and J=128
+lost going wider (−22% at `I=64`); J=48 loses going narrower. The shipped J=64
+is the right width for this workload, and the 31% column waste at `n=88` is real
+but is not worth trading blocks for.
+
+### `relu_sqr` fusion: bigger than it looks
+
+Nemotron-H's FFN activation is ReLU², not a gated GLU, so the existing
+`{MUL_MAT_ID, MUL_MAT_ID, GLU}` fusion never fires for it and
+`unary_op_kernel<relu_sqr>` runs as its own pass over the FFN intermediate —
+2.8% of GPU time that a fusion would eliminate outright.
+
+But this is **not** a fusion-table entry. `mmq.cuh` has no epilogue or
+activation mechanism at all, and the GLU fusion is a dedicated kernel pairing
+the gate and up mat-muls rather than a general activation hook. Fusing ReLU²
+means building an epilogue from scratch into a kernel templated on
+`<type, J, fallback>`, adding a dimension to that and plumbing it through
+`launch_mul_mat_q` and `mul_mat_q_switch_J`, with the instantiation-count and
+compile-time cost that implies. Worth ~2.8%; priced accordingly.
 
 ---
 
