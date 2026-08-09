@@ -437,11 +437,37 @@ alone suggest.
 
 Routing them to MMQ instead has now been tested **twice** — before and after the
 stream-k fix — at −6.5% and −10.5%. rocBLAS genuinely wins these shapes. Any
-further gain there needs a different GEMM, not different routing. The untried
-option is per-shape Tensile tuning: `ROCBLAS_LAYER=4` emits a yaml of chosen
-solution indices, `rocblas-gemm-tune` searches better ones, and
-`ROCBLAS_TENSILE_GEMM_OVERRIDE_PATH` installs the result. (Documented for ROCm
-5.7.1; not verified to survive unchanged in 7.x.)
+further gain there needs a different GEMM, not different routing.
+
+The untried option is **per-shape Tensile tuning**. Confirmed present in this
+stack (ROCm 7.14, `strings librocblas.so`), not just in the 5.7.1 docs:
+
+    ROCBLAS_LAYER                        1=trace 2=bench 4=profile
+    ROCBLAS_TENSILE_GEMM_OVERRIDE_PATH   installs a tuned solution-index map
+    ROCBLAS_TENSILE_LIBPATH
+
+`ROCBLAS_LAYER=4` emits a yaml of the solution index chosen per GEMM problem;
+`rocblas-gemm-tune` searches for better ones; the override path installs the
+result. **Blocker in this image**: the `rocblas-gemm-tune` and `rocblas-bench`
+binaries are not installed (only `rocblas_clients_readme.txt`), so the search
+step needs the rocBLAS clients package added first.
+
+The shapes to tune, captured with `ROCBLAS_LAYER=2` at `-ub 512` (n scales with
+ubatch, so n=2048 at the production setting):
+
+| calls | transA/transB | m | n | k |
+|---:|---|---:|---:|---:|
+| 80 | T/N | 5376 | 512 | 4096 |
+| 80 | T/N | 512 | 512 | 4096 |
+| 80 | T/N | 4096 | 512 | 8192 |
+| 80 | T/N | 4096 | 512 | 5376 |
+| 320 | T/N | 128 | 128 | 128 |
+| 320 | T/N | 64 | 128 | 128 |
+| 320 | N/T | 64 | 128 | 128 |
+| 320 | N/T | 128 | 64 | 128 |
+
+The four large T/N shapes are the dense FP16 GEMMs; the 128-cubed group is the
+chunked-SSD batched GEMMs from change set 4.
 
 Weights are re-dequantised once per ubatch, every ubatch. No upstream dequant
 cache exists — it would cost 2× model size in VRAM, which is presumably why.
