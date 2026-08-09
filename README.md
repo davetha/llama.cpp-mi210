@@ -480,128 +480,156 @@ now been ambiguous three times.
 
 ---
 
-## Scope: what is left, and what it would cost
+## Scope: where the remaining headroom actually is
 
-Prefill is now **2697 t/s at pp16384** against 1775 upstream (**+51.9%**). The
-remaining profile at pp4096 (total ~5100 ms):
+**Correction to an earlier version of this document.** A previous revision named
+a fused dequantise + FP16 GEMM as the strongest remaining project, on the
+grounds that the rocBLAS dense path was the largest single block of time. That
+ranking was wrong: it compared blocks by *time* without checking how much
+arithmetic each was doing. Cross-referencing the profile against FLOP counts
+derived from the GGUF tensor shapes reverses the conclusion.
 
-| block | share | what it is |
-|---|---:|---|
-| MMQ expert matmuls | ~42% | already tuned; three config knobs swept |
-| rocBLAS dense GEMMs | ~19% | attention QKV/out, SSM out-proj, MoE router |
-| dequant + convert | ~5% | exists **only** to feed rocBLAS |
-| `mm_ids_helper<22>` | ~5% | fixed in change set 8 |
-| everything else | ~29% | long tail, nothing over 3% |
+### The two paths, measured
 
-The dense block is the only remaining concentration. It is **not** avoidable:
-those four shapes are the attention projections, the SSM output projection and
-the 512-way MoE router — all essential model computation.
+Weight-matmul FLOPs per token, computed from the actual tensor shapes:
 
-### Closed: route the dense GEMMs to MMQ
+| block | MACs/token | share |
+|---|---:|---:|
+| routed experts | 4.844 G | 41.4% |
+| SSM projections (`ssm_in`, `ssm_out`) | 4.383 G | 37.5% |
+| shared expert | 1.762 G | 15.1% |
+| latent up/down | 0.336 G | 2.9% |
+| attention | 0.285 G | 2.4% |
+| router | 0.084 G | 0.7% |
+| **total** | **11.694 G** | (matches the A12B label) |
 
-Tested **three times**, at three different MMQ configurations, as the premise
-changed each time:
+Against measured GPU-time shares at pp4096:
 
-| when | MMQ config | result |
-|---|---|---|
-| before stream-k fix | 512/I128, stream_k on | −6.5% |
-| after stream-k fix | 512/I128, stream_k off | −10.5% |
-| after tile retune | 256/I64, stream_k off | **−9.2%** |
+| path | FLOP share | time share | FLOP per unit time |
+|---|---:|---:|---:|
+| routed experts — MMQ | 41.4% | 41.8% | **0.99** |
+| everything dense — rocBLAS + its conversions | 58.6% | 24.2% | **2.42** |
 
-rocBLAS wins these shapes regardless of how MMQ is tuned. This option is closed.
+**The rocBLAS dense path is ~2.4x more FLOP-efficient than the MMQ expert path.**
+The dense GEMMs run at 50-70% of the 181 TFLOPS peak when benchmarked in
+isolation (90.5 / 94.5 / 127.2 TFLOPS). Overall the model achieves 13.6% of
+peak. The deficit is not in the dense block.
 
-### Closed: per-shape Tensile solution override
+### Why the experts are slow, and why that is not the kernel's fault
 
-908 candidate kernels timed across the four shapes; none beat rocBLAS's default
-pick. See the section above.
+This is a **LatentMoE**: experts operate in a 1024 -> 2688 -> 1024 latent space
+rather than at model width. With 512 experts, top-22 routing, and a 2048-token
+ubatch, each expert receives on average
 
-### Option A — fused dequantise + FP16 MFMA GEMM
+    2048 tokens * 22 / 512 experts = 88 tokens
 
-**The strongest remaining idea, and the only one that attacks two blocks at once.**
+so every routed-expert GEMM is `m=2688, n=88, k=1024`. That is extremely skinny,
+against a tile whose J is 64. No kernel reaches dense-GEMM efficiency at n=88 --
+this is geometry, not implementation quality. Any project here is about
+*mitigating* the shape, not about writing a faster inner loop.
 
-Today the dense path does: dequantise Q4_K weights to FP16 into a scratch
-buffer, convert activations F32→F16, then `cublasGemmEx`. For the
-4096×8192 weight that is ~67 MB written and ~67 MB read back **per call, per
-ubatch**, plus 276 ms of kernel time that produces no arithmetic.
+### Ceilings
 
-A GEMM that dequantises inline from LDS would delete the conversion kernels and
-their HBM round-trip outright.
+| project | recoverable GPU time | throughput |
+|---|---:|---:|
+| fused dequant + FP16 GEMM on the dense path | 9.2% | ~+10% |
+| MoE expert path 30% faster | 12.5% | ~+14% |
+| MoE expert path 50% faster | 20.9% | ~+26% |
 
-- **Ceiling**: 276 ms of conversions (5.4%) plus whatever the improved locality
-  buys in the GEMM itself. Optimistically 8–12% end to end.
-- **Effort**: 4–8 weeks of specialist work — MFMA intrinsics, LDS
-  double-buffering, prefetch pipelining, split-k, per-shape tiling.
-- **Risk**: high. rocBLAS currently achieves 50–70% of the 181 TFLOPS peak on
-  these shapes (90.5 / 94.5 / 127.2 TFLOPS). Tensile has person-years of tuning
-  behind it; hand-written first attempts typically land at 40–60% of rocBLAS.
-  The dequant saving is real and certain, but it has to more than pay for
-  whatever the hand-written GEMM gives up.
-- **Note**: this is essentially what MMQ does, except MMQ uses int8. On CDNA2
-  int8 and FP16 MFMA have the *same* 181 TOPS peak, so MMQ pays quantisation
-  overhead for no throughput advantage — which is exactly why it loses here. An
-  FP16 variant does not have that handicap.
+### Option 1 — grouped / fused MoE GEMM  *(highest yield)*
 
-### Option B — hipBLASLt directly
+One kernel covering all experts with a shared tiling strategy, rather than the
+current per-expert dispatch. This is what vLLM's AITER path does, and is the
+most likely single explanation for its 4,070 t/s on the same hardware.
 
-llama.cpp has a hipBLASLt batched-GEMM path (PR #16457) gated to CDNA3.
-Extending it to CDNA2 would bypass rocBLAS's dispatch shim.
+Concretely it attacks three things at once: the launch and indexing overhead
+(`mm_ids_helper` is still 4.9% even after change set 8), the poor tile
+utilisation at n=88, and the intermediate traffic in the combine tail.
 
-- **Ceiling**: low. Routing through the shim measured **+0.2%**, and hipBLASLt
-  shares Tensile's kernel library.
-- **Effort**: 1–2 weeks including validation.
-- **Verdict**: poor ratio. Not recommended before Option A.
+- **Ceiling**: +14% at a 30% improvement, +26% at 50%.
+- **Effort**: large. This is a new kernel plus a graph-level change to the
+  MUL_MAT_ID path, not a config edit.
+- **Risk**: high, but *lower than a dense-GEMM rewrite* -- here you are
+  competing against a path running at 0.99 FLOP/time, not against Tensile at
+  50-70% of peak. There is real slack to recover.
 
-### Option C — hand-written FP16 MFMA GEMM, no dequant fusion
+### Option 2 — upstream PR [#25952](https://github.com/ggml-org/llama.cpp/pull/25952), fused MoE combine
 
-Option A minus its best justification. Same effort, smaller prize (~19% block
-rather than ~24%), same risk of losing to Tensile. **Not recommended** —
-if this work is done at all, do Option A.
+Fuses the post-`MUL_MAT_ID` scale-and-sum into a single reduction, removing the
+intermediate `[n_embd, k, n_tokens]` tensor.
 
-### Cheaper things worth doing first
+Measured cost of that tail here: one `k_bin_bcast<op_mul>` (76.6 ms) plus four
+`k_bin_bcast<op_add>` kernels (44.5 + 25.1 + 18.4 + 9.1 ms) = **173.7 ms, 3.4%**
+of GPU time.
 
-1. **Land the AMD rocBLAS switch** above — +2.7% for an environment variable.
-2. **Upstream PR [#25952](https://github.com/ggml-org/llama.cpp/pull/25952)**
-   (fused MoE expert reduction, +3.6–7.1% measured on CUDA) currently handles
-   `k = 2..15`; this model's `top_k = 22` exceeds the cap and falls back.
-   Extending the cap is far less work than any GEMM project.
-3. **Upstream PR [#26621](https://github.com/ggml-org/llama.cpp/pull/26621)**
-   (L2 cache-set aliasing, up to 20% on RDNA3.5, untested on CDNA2). The
-   dequantised FP16 buffers feeding rocBLAS alias whenever `ne00 % 1024 == 0`,
-   which is common here — and Option A would delete those buffers entirely, so
-   test this *before* committing to a GEMM rewrite.
+- **Ceiling here: ~2%**, not the +3.6-7.1% in the PR's own numbers -- those were
+  measured on models whose combine tail is a larger share.
+- **Effort**: back-porting an open PR across 243 commits, *plus* raising its
+  `k <= 15` cap. That cap comes from `ggml_can_fuse_subgraph`'s 31-node limit
+  applied to the long form (`2k + 1 <= 31`); this model's `top_k = 22` needs 45
+  nodes on that form. The short form (`experts * router_weight`, no per-expert
+  scale) needs roughly `k + 1` nodes, so 22 would fit -- but that has to be
+  confirmed against which form this graph actually produces.
+- **Verdict**: poor ratio at ~2%. Reconsider if it merges upstream and the
+  rebase cost disappears.
 
-**Recommendation**: do the three cheap items. Treat Option A as a genuine
-project to be scheduled deliberately, not as a next step — and only after
-measuring #26621, which targets the same buffers Option A would remove and
-could change the arithmetic.
+### Option 3 — more tokens per expert
+
+The shape problem would soften with a larger ubatch: `-ub 4096` would give 176
+tokens per expert instead of 88. **Already measured and rejected** -- `-ub 4096`
+is 2388 t/s against 2564 at `-ub 2048`. Whatever the better GEMM shape buys is
+more than lost elsewhere.
+
+### Demoted: fused dequantise + FP16 MFMA GEMM on the dense path
+
+Still a real ~+10%, and the dequant elimination (276 ms, 5.4%) is certain rather
+than speculative. But it targets the path already at 2.42 FLOP/time and requires
+beating Tensile at 50-70% of peak, where hand-written first attempts typically
+land at 40-60% of rocBLAS. **Do Option 1 first.**
+
+### Closed, with evidence
+
+| idea | outcome |
+|---|---|
+| route dense GEMMs to MMQ | tested 3x at 3 different MMQ configs: -6.5%, -10.5%, -9.2% |
+| per-shape Tensile solution override | 908 candidate kernels timed, none beat the default |
+| `J=96` matching the 88-token mean expert width | -22% at `I=64`; still worse at `I=32` where occupancy is preserved |
+| larger ubatch for better expert shape | `-ub 4096` is 7% slower |
+| hipBLASLt | present in AMD's rocBLAS; adds +0.2% over it |
 
 ---
 
-## A note on measuring these changes
+## A note on measuring changes here
 
-Four separate configurations in this work benchmarked **faster while computing
-wrong results**, three of them by a wide margin:
+Two failure modes have each cost real time in this project. Both are cheap to
+guard against and expensive to miss.
+
+**1. A stale binary after reverting the source.** Patch scripts edit source;
+`cmake --build` is a separate step. Reverting a patch at the end of a sweep
+script without rebuilding leaves the *previous* binary in place, and everything
+measured afterwards silently belongs to the wrong build. This happened twice:
+once producing a profile whose kernel mix made no sense, and once leaving a
+force-MMQ binary in place for several subsequent measurements. **Always rebuild
+after `--revert`, and check `git status` plus a known-good throughput number
+before trusting a profile.**
+
+**2. A benchmark that is faster because it is wrong.** Four configurations in
+this work benchmarked faster while failing correctness:
 
 | config | apparent gain | reality |
 |---|---|---|
 | `I=64` alone | +29% | 362 + 637 test failures |
-| `nthreads=256` alone | +23% | 11 + 595 test failures |
+| `MMQ_ITER_K=512` | +25% | 263 + 541 failures |
+| `nthreads=256` alone | +23% | 11 + 595 failures |
 | `nthreads=384 / I=96` | +2% | fails every quant type |
-| `MMQ_ITER_K=512` | +25% | 263 + 541 test failures |
 
-The fastest number measured in the entire session was wrong. Anything that
+The fastest number measured in the entire project was wrong. Anything that
 breaks a tiling invariant does less work, and doing less work looks exactly like
-an optimisation on a throughput chart.
+an optimisation.
 
-Two practical consequences:
-
-1. **`test-backend-ops -o MUL_MAT` / `MUL_MAT_ID` / `SSM_SCAN` before any
-   benchmark is believed**, then generated tokens at `temperature 0` on top.
-2. **Count failures with a plain `grep FAIL`.** The harness prints them as
-   `[MUL_MAT] ERR = 0.128 > 0.0005   MUL_MAT(...): FAIL` — a pattern anchored to
-   leading whitespace matches nothing and reports a clean run for a broken
-   build. That happened here and briefly cleared a config that was in fact fine,
-   but the same mistake in the other direction is what ships corruption.
+Count harness failures with a plain `grep FAIL`: they print as
+`[MUL_MAT] ERR = 0.128 > 0.0005   MUL_MAT(...): FAIL`, so a pattern anchored to
+leading whitespace matches nothing and reports a clean run for a broken build.
 
 ---
 

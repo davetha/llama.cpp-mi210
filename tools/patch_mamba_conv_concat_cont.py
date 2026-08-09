@@ -68,6 +68,8 @@ def main() -> int:
         with open(TARGET, "w") as f:
             f.write(src.replace(NEW, ORIG, 1))
         print("reverted")
+        print("REBUILD REQUIRED: source reverted but the binary was not rebuilt; "
+              "it still contains the previous state and will be measured instead.", file=sys.stderr)
         return 0
 
     if patched:
