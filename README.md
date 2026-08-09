@@ -439,21 +439,50 @@ Routing them to MMQ instead has now been tested **twice** — before and after t
 stream-k fix — at −6.5% and −10.5%. rocBLAS genuinely wins these shapes. Any
 further gain there needs a different GEMM, not different routing.
 
-The untried option is **per-shape Tensile tuning**. Confirmed present in this
-stack (ROCm 7.14, `strings librocblas.so`), not just in the 5.7.1 docs:
+Per-shape Tensile tuning was the last identified lever. **It has now been tested
+and is exhausted** -- see `tools/rocblas_solution_tune.cpp`.
 
-    ROCBLAS_LAYER                        1=trace 2=bench 4=profile
-    ROCBLAS_TENSILE_GEMM_OVERRIDE_PATH   installs a tuned solution-index map
-    ROCBLAS_TENSILE_LIBPATH
+rocBLAS picks a Tensile kernel per problem from its shipped library using a
+heuristic, and `ROCBLAS_TENSILE_GEMM_OVERRIDE_PATH` exists because that pick is
+sometimes wrong. The obvious way to search for a better one is
+`rocblas-bench --solution_index`. **That does not work**, in two different ways:
 
-`ROCBLAS_LAYER=4` emits a yaml of the solution index chosen per GEMM problem;
-`rocblas-gemm-tune` searches for better ones; the override path installs the
-result. **Blocker in this image**: the `rocblas-gemm-tune` and `rocblas-bench`
-binaries are not installed (only `rocblas_clients_readme.txt`), so the search
-step needs the rocBLAS clients package added first.
+- with the default `--algo 0` the index is accepted and silently **ignored** --
+  passing `99999` or `-1` runs fine and changes nothing;
+- with `--algo 1` every small index returns `rocblas_status_invalid_value`,
+  because valid indices are not `1..N` but opaque values that must come from
+  `rocblas_gemm_ex_get_solutions` (a beta API, gated behind
+  `ROCBLAS_BETA_FEATURES_API`).
 
-The shapes to tune, captured with `ROCBLAS_LAYER=2` at `-ub 512` (n scales with
-ubatch, so n=2048 at the production setting):
+`tools/rocblas_solution_tune.cpp` queries the real list and times every
+candidate against the default. Result on gfx90a, ROCm 7.14, 20 iterations each:
+
+| shape | solutions | default | TFLOPS | % of 181 peak | best candidate |
+|---|---:|---:|---:|---:|---|
+| 4096x2048x8192 | 227 | 1519 us | 90.5 | 50% | **none faster** |
+| 4096x2048x5376 | 227 | 955 us | 94.5 | 52% | **none faster** |
+| 5376x2048x4096 | 227 | 709 us | 127.2 | 70% | **none faster** |
+| 512x2048x4096 | 227 | 170 us | 50.5 | 28% | **none faster** |
+
+908 candidate kernels timed, none better than what rocBLAS already chooses. The
+heuristic is not the problem; 50-70% of peak is simply what this Tensile library
+delivers for these shapes on CDNA2. Overriding the selection cannot help, so the
+override path is a dead end here regardless of whether `rocblas-gemm-tune` is
+packaged.
+
+**Also settled while doing this**: `rocblas-bench` reports
+`hipBLASLt: N/A, as rocBLAS was built without hipBLASLt`. That explains the
+earlier `ROCBLAS_USE_HIPBLASLT=1` no-op -- the backend is absent from this
+build, not merely declining to route. Note llama.cpp links Ubuntu's
+`/usr/lib/x86_64-linux-gnu/librocblas.so.5`, not `/opt/rocm`'s, so that is the
+library whose behaviour matters.
+
+Remaining ideas for this 23% are therefore structural rather than
+configuration: a different GEMM implementation (a hand-written CDNA2 FP16 MFMA
+kernel, or hipBLASLt from a build that includes it), or avoiding the dense
+matmuls entirely.
+
+The shapes, captured with `ROCBLAS_LAYER=2` at `-ub 512` (n scales with ubatch):
 
 | calls | transA/transB | m | n | k |
 |---:|---|---:|---:|---:|
