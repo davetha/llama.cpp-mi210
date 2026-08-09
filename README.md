@@ -703,19 +703,78 @@ the view recovered the head axis for `y`, the state region at `s_off` is still
 described by the same false "contiguous prefix" premise. The information is
 missing from the split state itself, not merely mis-propagated by the view.
 
-### Conclusion
+### Conclusion — CORRECTED, the earlier one was wrong
 
-This is worth an upstream issue rather than a fork patch: ggml ops with fused
+An earlier revision of this section concluded that "ggml ops with fused
 multi-region outputs cannot be tensor-split under the current single-segment
 model, which is exactly why every SSM/hybrid architecture sits on the
-`llm_arch_supports_sm_tensor` exclusion list. The fix belongs with whoever owns
-the split-state design, because it is a change to that model.
+`llm_arch_supports_sm_tensor` exclusion list."
 
-Everything up to the wall is banked in that patch and is directly reusable if
-the framework gains multi-segment op outputs: the Nemotron-H tensor split table
-and `handle_ssm_scan` would both stand. The one piece that was independently
-correct — the `n_gqa == 0` divide-by-zero — is already on `main` and is worth
-sending upstream on its own.
+**Both halves of that are false**, and the refutation is in the same file the
+analysis was done in.
+
+`ggml_gated_delta_net` returns a fused output-plus-recurrent-state buffer — the
+same problem class — and `handle_gated_delta_net` splits it with a plain
+single-segment rule:
+
+```c
+return {GGML_BACKEND_SPLIT_AXIS_0, {0}, {1}, 1};   // n_segments == 1
+```
+
+Qwen3-Next uses that op, `llm_arch_is_hybrid()` returns true for it, and it is
+**not** on the exclusion list. So a fused-state hybrid already runs tensor-
+parallel here. The exclusion list is also not "every SSM/hybrid" — it carries
+GROK, MPT, DeepSeek2/3.2/4, T5, BitNet and others that have no SSM at all.
+
+The real difference is the **declared output shape**:
+
+| op | output shape | head axis |
+|---|---|---|
+| `ggml_gated_delta_net` | `[S_v*H, n_tokens*n_seqs + K*S_v*n_seqs]` | axis 0 ✓ |
+| `ggml_rwkv_wkv7` | `[S*H, n_tokens + S*n_seqs]` | axis 0 ✓ |
+| `ggml_ssm_scan` | `[nelements(x) + state_size]` | **1-D flat — destroyed** |
+
+The two siblings keep the head count as a real axis shared by both regions.
+`ggml_ssm_scan` throws it away, so a proportional split of it is exact in size
+and wrong in layout, and every view downstream inherits that. The blocker was
+the shape declaration, not the framework.
+
+### The fix, and what it costs
+
+Give `ggml_ssm_scan` the same discipline:
+
+```
+[d_inner, n_seq_tokens*n_seqs + d_state*n_seqs]      d_inner = head_dim*n_head
+```
+
+Total size is unchanged and the `y` region's bytes are unchanged. Only the state
+region reorders, from `{d_state, head_dim, n_head, n_seqs}` to
+`{head_dim, n_head, d_state, n_seqs}`, so its rows are `d_inner` wide too. Then
+one AXIS_0 split at a multiple of `head_dim` is head-aligned in **both** regions
+and **no framework change is needed at all** — neither the 11-site multi-segment
+change nor the 7-backend op-signature change considered earlier.
+
+It is not free. `d_state` was the fastest-moving axis of the state, and that is
+exactly what the sequential kernels vectorise over — the CPU path loads
+`s0 + i + ii*nc` along `d_state` in three SIMD variants, and the CUDA group
+kernel reads `s0_warp[WARP_SIZE*j + lane]` the same way. Making `d_state` the
+slowest axis makes both strided.
+
+That cost lands on **decode and CPU inference**, not on the SSD chunked prefill
+path: there the state lives in a cuBLAS scratch buffer and the transpose is an
+operand swap (`m=head_dim, n=d_state, ldc=head_dim`), same FLOPs, no extra
+kernel. Prefill is what tensor parallelism is being chased for, so the trade
+points the right way — but it is a real regression and has to be measured. The
+CPU loop can be re-vectorised over `head_dim` by swapping the `i`/`i1` loops.
+
+**Status: incomplete.** `ggml.c` and the CPU kernel are done on the
+`ssm-scan-2d` branch. `ggml-cuda/ssm-scan.cu` (two sequential kernels, plus
+`init_state`, `scale_state`, the 3e state GEMM and the final copy in the SSD
+path) and the `get_ssm_rows` reshape at the three call sites are not. Nothing is
+proven until it runs and the generated tokens match `-sm layer` at temperature 0.
+
+The one piece that was independently correct — the `n_gqa == 0` divide-by-zero —
+is already on `main` and is worth sending upstream on its own.
 
 ### What this leaves on the table
 
