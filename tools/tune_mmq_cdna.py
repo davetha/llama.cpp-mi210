@@ -70,6 +70,8 @@ def main() -> int:
             f.write(src)
         os.remove(BACKUP)
         print("reverted to pre-tuning config")
+        print("REBUILD REQUIRED: source reverted but the binary was not rebuilt; "
+              "it still contains the previous state and will be measured instead.", file=sys.stderr)
         return 0
 
     with open(TARGET) as f:
