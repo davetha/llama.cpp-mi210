@@ -385,6 +385,128 @@ upstreaming this should gate on the backend or fix the concat kernel instead.
 
 ---
 
+### 10. Choose the micro-batch size per decode call  → [`patches/10-adaptive-ubatch.patch`](patches/10-adaptive-ubatch.patch)
+
+**+12.4% on 2k prompts, +8.8% on 3k.** A latency win for interactive workloads.
+
+With `-sm layer` the two devices form a pipeline: GPU0 holds the first half of
+the layers, GPU1 the second. A call that produces a **single** micro-batch runs
+them strictly sequentially -- one idles while the other works. Only two or more
+micro-batches overlap them. Measured aggregate utilisation:
+
+| prompt | micro-batches | aggregate GPU utilisation |
+|---|---:|---:|
+| pp4096 | 2 | 62.0% |
+| pp16384 | 8 | 85.6% |
+
+A larger ubatch buys kernel efficiency; a smaller one buys pipeline depth. `-ub`
+is fixed at startup, so a context sized for long prompts pays for it on every
+short request. This picks the largest power-of-two ubatch that still yields at
+least two per call:
+
+```c
+ubatch = clamp(pow2_floor(n_tokens_all / 2), 256, cparams.n_ubatch)
+```
+
+| prompt | fixed `-ub 2048` | adaptive | delta |
+|---|---:|---:|---:|
+| pp1024 | 1346 | **1377** | +2.3% |
+| pp2048 | 1589 | **1786** | **+12.4%** |
+| pp3072 | 1841 | **2003** | **+8.8%** |
+| pp4096 | 2099 | 2093 | −0.3% |
+| pp6144 | 2336 | 2257 | **−3.4%** |
+| pp8192 | 2483 | 2475 | −0.3% |
+| pp16384 | 2696 | 2681 | −0.6% |
+
+**The signal is the size of this call, not the prompt length.** A first attempt
+keyed on prompt length regressed 16k by 10%: llama.cpp already caps a call at
+`n_batch`, so a 16k prompt arrives as four 4096-token calls and a
+prompt-length test fires on every one.
+
+**The pp6144 regression is real and not fixable here.** That prompt splits into a
+4096 call plus a 2048 tail; the tail does not need extra depth because the
+preceding call already filled the pipeline, but a *standalone* 2048 does — and
+the two are indistinguishable without tracking continuation state. The trade was
+taken deliberately: +12.4% and +8.8% in the common chat range against −3.4% in a
+narrow band around 6k.
+
+Only ever shrinks `cparams.n_ubatch`, so compute buffers sized at context
+creation stay valid. Gated on `causal_attn`, because non-causal attention asserts
+`n_ubatch >= n_tokens` a few lines above.
+
+**Files (1):** `src/llama-context.cpp`.
+
+---
+
+## Measured against vLLM: what the remaining gap actually is
+
+The 4,070 t/s vLLM figure quoted in earlier revisions of this document was
+inherited, not measured here. Measuring both engines on the same box, same
+model architecture (`NemotronHForCausalLM`, 512 experts, top-22, hidden 4096),
+at matched prompt lengths:
+
+| prefill | llama.cpp | vLLM TP=2 | gap |
+|---|---:|---:|---:|
+| ~4k | 2102 | 3635 | **1.73x** |
+| ~16k | 2708 | 3563 | **1.32x** |
+
+vLLM was run from `local/vllm-mi210:dsa7-aiterint8` on
+`/mnt/llm-storage/nemotron3-120b-awq` with `--tensor-parallel-size 2`. Note that
+image bakes in `HIP_VISIBLE_DEVICES=0`, so it must be overridden to see both
+cards. vLLM's numbers include HTTP and tokenisation, so they are marginally
+pessimistic; llama.cpp's are pure prefill from `llama-bench`.
+
+### The difference is tensor parallelism
+
+Sampling `/sys/class/drm/card*/device/gpu_busy_percent` during a 16k prefill:
+
+| engine | gpu0 mean | gpu1 mean | both >50% simultaneously |
+|---|---:|---:|---:|
+| vLLM TP=2 | 99.4% | 99.6% | **99% of samples** |
+| llama.cpp `-sm layer` | — | — | 73.5% of window (pp16384), 30.5% (pp4096) |
+
+vLLM runs both cards on **every layer**. llama.cpp splits layers across cards and
+relies on multiple micro-batches to overlap them, which works well at long
+context (85.6% aggregate) and poorly at short (62%). That is exactly why the gap
+is worse at 4k than at 16k.
+
+### llama.cpp cannot do tensor parallelism on ROCm
+
+`-sm row` is the tensor-parallel mode, and it fails with
+
+```
+device ROCm0 does not support split buffers
+```
+
+This is not a configuration problem. `ggml_backend_split_buffer_type` is
+implemented by **only one backend in the entire tree, SYCL** — confirmed on both
+this branch and upstream `master`. The CUDA/HIP backend exposes no such function,
+so `-sm row` cannot work here at all. Closing that part of the gap would mean
+implementing split buffers for the CUDA/HIP backend: a substantial upstream
+project, not a patch.
+
+### What this means for the remaining ~1.3x
+
+Roughly, at 16k: ~1.16x of it is the parallelism difference (85.6% vs ~99%
+utilisation) and the rest is kernel efficiency — consistent with the earlier
+finding that the MoE expert path runs at 0.99 FLOP/time against 2.42 for the
+dense path.
+
+So the two remaining levers are unchanged in kind, but their sizes are now known:
+
+1. **Grouped/fused MoE GEMM** — the kernel-efficiency half. Still the highest
+   yield available without a backend-level project.
+2. **Split buffers for CUDA/HIP** — the parallelism half. Larger, upstream, and
+   would benefit every multi-GPU ROCm user, not just this box.
+
+Neither is a tuning knob. The tuning knobs are exhausted: `nthreads`,
+`occupancy`, `I`, `J`, `stream_k`, `K_vram`, SSD chunk size, `-b`, `-ub`,
+`-ctk`/`-ctv`, `-ts`, all seven `GGML_CUDA_*` environment variables, per-shape
+Tensile solution override (908 kernels timed), and the MMQ carve-out (three
+separate tests).
+
+---
+
 ## Combined result (change sets 4–9)
 
 `llama-bench`, 2× MI210, Nemotron-3-Super-120B-A12B `i1-Q4_K_M`,
@@ -660,13 +782,13 @@ fork at:
 c26cbdffcf6fc9b7430cd6b117757e9a3f70b7ea  Merge pull request #225 from TheTom/fix-ui-assets-partial-dist
 ```
 
-Change sets **4-9** are generated against **upstream `ggml-org/llama.cpp`** at:
+Change sets **4-10** are generated against **upstream `ggml-org/llama.cpp`** at:
 
 ```
 67b9b0e7f6ce45d929a4411907d3c48ec719e81c  llama-arch: fix DeepSeek4 APE tensor op (#25945)
 ```
 
-These are different bases. Change sets 4-9 were developed and measured on the
+These are different bases. Change sets 4-10 were developed and measured on the
 upstream tree, **not** on the TurboQuant fork, and have not been tested there —
 `ssm-scan.cu` in particular changed substantially upstream in the interim, so
 expect `patches/04-*` to need rebasing before it applies to the fork. The two
@@ -686,7 +808,7 @@ git apply 03-turboquant-wave64-fixes.patch
 # build for gfx90a (see BUILD.md)
 ```
 
-Change sets 4-9 target upstream llama.cpp instead (see "Base commit" above):
+Change sets 4-10 target upstream llama.cpp instead (see "Base commit" above):
 
 ```bash
 git clone https://github.com/ggml-org/llama.cpp.git
@@ -698,6 +820,7 @@ git apply patches/06-mmq-cdna-tile-retune.patch
 git apply patches/07-ssd-chunk-size-cdna.patch
 git apply patches/08-mmid-generalize-neu-padded.patch
 git apply patches/09-mamba-conv-concat-cont.patch
+git apply patches/10-adaptive-ubatch.patch
 cmake -B build -DGGML_HIP=ON -DAMDGPU_TARGETS=gfx90a -DGGML_HIP_MMQ_MFMA=ON \
       -DCMAKE_BUILD_TYPE=Release
 cmake --build build --target llama-bench llama-server test-backend-ops -j
