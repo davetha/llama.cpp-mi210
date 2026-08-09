@@ -309,6 +309,21 @@ Total GPU kernel time at pp4096 fell from 7703 ms to 5331 ms (−31%).
 vLLM with its AITER fast paths reaches 4,070 t/s at 16k on the same hardware
 with an AWQ-INT4 Nemotron. The gap narrows from **2.29× to 1.57×**. Still open.
 
+### Scaling to long prefill
+
+The gains hold as the prompt grows, which is the case that actually matters for
+long-context work:
+
+| prefill | t/s |
+|---|---:|
+| pp4096 | 2013 |
+| pp16384 | 2590 |
+| pp32768 | **2640** |
+| pp65536 | 2530 |
+
+Throughput is flat-to-rising out to 64k rather than degrading, so a 256k-token
+prefill projects to roughly 100-110 s.
+
 ### Profile evolution (pp4096)
 
 | | upstream | after 4–7 |
