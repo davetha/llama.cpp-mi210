@@ -425,146 +425,155 @@ MMQ is ~42%; the rocBLAS dense path plus the conversions feeding it is ~23%.
 
 ---
 
-## Where the remaining headroom is
+## Use AMD's rocBLAS, not Ubuntu's (+2.7%, no rebuild)
 
-The dense FP16 GEMMs are the largest untouched block. `dequantize_block_q4_K`
-and `convert_unary` are not independent kernels — they are
-`ggml_cuda_mul_mat_cublas_impl` dequantising weights to fp16 and converting
-activations, feeding `cublasGemmEx(..., CUDA_R_16F, ..., CUBLAS_COMPUTE_32F)`,
-which is exactly Tensile's `Cijk_..._HSS_BH` naming. So the real cost of the
-rocBLAS path is **959 + 273 = 1232 ms (23%)**, not the 18% the GEMM kernels
-alone suggest.
+**Two different rocBLAS builds are installed on this box, and llama.cpp links the
+weaker one.**
 
-Routing them to MMQ instead has now been tested **twice** — before and after the
-stream-k fix — at −6.5% and −10.5%. rocBLAS genuinely wins these shapes. Any
-further gain there needs a different GEMM, not different routing.
-
-Per-shape Tensile tuning was the last identified lever. **It has now been tested
-and is exhausted** -- see `tools/rocblas_solution_tune.cpp`.
-
-rocBLAS picks a Tensile kernel per problem from its shipped library using a
-heuristic, and `ROCBLAS_TENSILE_GEMM_OVERRIDE_PATH` exists because that pick is
-sometimes wrong. The obvious way to search for a better one is
-`rocblas-bench --solution_index`. **That does not work**, in two different ways:
-
-- with the default `--algo 0` the index is accepted and silently **ignored** --
-  passing `99999` or `-1` runs fine and changes nothing;
-- with `--algo 1` every small index returns `rocblas_status_invalid_value`,
-  because valid indices are not `1..N` but opaque values that must come from
-  `rocblas_gemm_ex_get_solutions` (a beta API, gated behind
-  `ROCBLAS_BETA_FEATURES_API`).
-
-`tools/rocblas_solution_tune.cpp` queries the real list and times every
-candidate against the default. Result on gfx90a, ROCm 7.14, 20 iterations each:
-
-| shape | solutions | default | TFLOPS | % of 181 peak | best candidate |
-|---|---:|---:|---:|---:|---|
-| 4096x2048x8192 | 227 | 1519 us | 90.5 | 50% | **none faster** |
-| 4096x2048x5376 | 227 | 955 us | 94.5 | 52% | **none faster** |
-| 5376x2048x4096 | 227 | 709 us | 127.2 | 70% | **none faster** |
-| 512x2048x4096 | 227 | 170 us | 50.5 | 28% | **none faster** |
-
-908 candidate kernels timed, none better than what rocBLAS already chooses. The
-heuristic is not the problem; 50-70% of peak is simply what this Tensile library
-delivers for these shapes on CDNA2. Overriding the selection cannot help, so the
-override path is a dead end here regardless of whether `rocblas-gemm-tune` is
-packaged.
-
-**Also settled while doing this**: `rocblas-bench` reports
-`hipBLASLt: N/A, as rocBLAS was built without hipBLASLt`. That explains the
-earlier `ROCBLAS_USE_HIPBLASLT=1` no-op -- the backend is absent from this
-build, not merely declining to route. Note llama.cpp links Ubuntu's
-`/usr/lib/x86_64-linux-gnu/librocblas.so.5`, not `/opt/rocm`'s, so that is the
-library whose behaviour matters.
-
-Remaining ideas for this 23% are therefore structural rather than
-configuration: a different GEMM implementation (a hand-written CDNA2 FP16 MFMA
-kernel, or hipBLASLt from a build that includes it), or avoiding the dense
-matmuls entirely.
-
-The shapes, captured with `ROCBLAS_LAYER=2` at `-ub 512` (n scales with ubatch):
-
-| calls | transA/transB | m | n | k |
-|---:|---|---:|---:|---:|
-| 80 | T/N | 5376 | 512 | 4096 |
-| 80 | T/N | 512 | 512 | 4096 |
-| 80 | T/N | 4096 | 512 | 8192 |
-| 80 | T/N | 4096 | 512 | 5376 |
-| 320 | T/N | 128 | 128 | 128 |
-| 320 | T/N | 64 | 128 | 128 |
-| 320 | N/T | 64 | 128 | 128 |
-| 320 | N/T | 128 | 64 | 128 |
-
-The four large T/N shapes are the dense FP16 GEMMs; the 128-cubed group is the
-chunked-SSD batched GEMMs from change set 4.
-
-Weights are re-dequantised once per ubatch, every ubatch. No upstream dequant
-cache exists — it would cost 2× model size in VRAM, which is presumably why.
-
-Upstream PRs worth watching, none of which help as-is:
-
-- [#24546](https://github.com/ggml-org/llama.cpp/pull/24546) — MoE-aware N-tile
-  picker. Computes `ncols_typical = 88` for this model but only applies it when
-  `ncols_typical < J_max`; with CDNA's `J_max = 64` the branch never fires.
-- [#25952](https://github.com/ggml-org/llama.cpp/pull/25952) — fused MoE expert
-  reduction, +3.6–7.1% prefill measured. Handles `k = 2..15`; **top_k = 22
-  exceeds the cap** and falls back.
-- [#26592](https://github.com/ggml-org/llama.cpp/pull/26592) — enables hipCUB on
-  HIP by reordering includes to dodge the `__trap` collision. Successor to the
-  stalled #26388. Would unblock `USE_CUB` in `ssm-scan.cu`.
-- [#26621](https://github.com/ggml-org/llama.cpp/pull/26621) — L2 cache-set
-  aliasing when packed row size is a multiple of 2048 B; up to 20% on RDNA3.5,
-  untested on CDNA2. The dequantised fp16 buffers feeding rocBLAS alias whenever
-  `ne00 % 1024 == 0`.
-- [#26294](https://github.com/ggml-org/llama.cpp/pull/26294) — fixes a real
-  duplicate-expert-id race in `mm_ids_helper` producing uninitialised `ids_dst`.
-  Worth reading against the unexplained multi-GPU fault documented above.
-
----
-
-## A note on measuring these changes
-
-Four separate configurations in this work benchmarked **faster while computing
-wrong results**, three of them by a wide margin:
-
-| config | apparent gain | reality |
+| library | built with hipBLASLt | linked by default |
 |---|---|---|
-| `I=64` alone | +29% | 362 + 637 test failures |
-| `nthreads=256` alone | +23% | 11 + 595 test failures |
-| `nthreads=384 / I=96` | +2% | fails every quant type |
-| `MMQ_ITER_K=512` | +25% | 263 + 541 test failures |
+| `/usr/lib/x86_64-linux-gnu/librocblas.so.5` (Ubuntu `librocblas5` 7.1.0) | **no** (0 references) | ✅ yes |
+| `/opt/rocm/lib/librocblas.so.5.5` (AMD ROCm 7.14) | **yes** (158 references) | ❌ no |
 
-The fastest number measured in the entire session was wrong. Anything that
-breaks a tiling invariant does less work, and doing less work looks exactly like
-an optimisation on a throughput chart.
+`libhipblaslt.so.1.4` is present at `/opt/rocm/core-7.14/lib/`. Pointing the
+loader at AMD's build is a runtime change — no recompilation:
 
-Two practical consequences:
+```bash
+export LD_LIBRARY_PATH=/opt/rocm/lib:/opt/rocm/core-7.14/lib:$LD_LIBRARY_PATH
+```
 
-1. **`test-backend-ops -o MUL_MAT` / `MUL_MAT_ID` / `SSM_SCAN` before any
-   benchmark is believed**, then generated tokens at `temperature 0` on top.
-2. **Count failures with a plain `grep FAIL`.** The harness prints them as
-   `[MUL_MAT] ERR = 0.128 > 0.0005   MUL_MAT(...): FAIL` — a pattern anchored to
-   leading whitespace matches nothing and reports a clean run for a broken
-   build. That happened here and briefly cleared a config that was in fact fine,
-   but the same mistake in the other direction is what ships corruption.
+Confirm it took effect with `ldd ./build/bin/llama-bench | grep -E 'rocblas|hipblaslt'`;
+you should see `/opt/rocm/lib/librocblas.so.5` **and** `libhipblaslt.so.1`.
+
+| build | pp4096 | pp16384 |
+|---|---:|---:|
+| Ubuntu rocBLAS (default) | 2046 | 2631 |
+| **AMD rocBLAS** | **2097** | **2696** |
+| AMD rocBLAS + `ROCBLAS_USE_HIPBLASLT=1` | 2101 | 2701 |
+
+**The gain is AMD's Tensile library, not hipBLASLt.** Explicitly enabling the Lt
+backend adds only a further +0.2%, inside run-to-run noise. What this does
+explain is why `ROCBLAS_USE_HIPBLASLT=1` was previously recorded as a no-op:
+the backend was absent from the linked library, so the variable had nothing to
+switch on. That earlier entry in "tested and rejected" was correct in outcome
+but wrong in cause.
+
+Verified: `test-backend-ops` MUL_MAT clean, plus two sequential requests read at
+`temperature 0` (technical explanation and step-by-step arithmetic).
+
+For a permanent fix, link with
+`-Wl,-rpath,/opt/rocm/lib:/opt/rocm/core-7.14/lib` instead of relying on the
+environment.
+
+### An unresolved intermittent
+
+Three times during this work, `test-backend-ops -o MUL_MAT` reported exactly 3
+lines matching `FAIL`. Each time it was a bare count — the failing test names
+were never captured. Across 37 subsequent controlled runs (12 + 25) it did not
+recur, and a paired 25-run sample scored **0/25 on both libraries**, so it
+cannot be attributed to either build. Every generated-token check in this
+project has been correct.
+
+Recorded rather than explained. Do not treat the throughput numbers here as
+affected, but if you see it, capture the actual `FAIL` lines — a count alone has
+now been ambiguous three times.
 
 ---
 
-## Tested and rejected (change sets 6–7)
+## Scope: what is left, and what it would cost
 
-| change | result |
-|---|---|
-| Force MMQ for the dense FP16 GEMMs, **retested** after the stream-k fix removed the original objection | still slower: 1642 vs 1834 t/s (−10.5%). rocBLAS genuinely wins these shapes on gfx90a. Two independent negative results now. |
-| `J=128` / `J=96` CDNA entries | −26% / −22%, both correct |
-| `occupancy` 2 or 4 | flat at 512 threads (LLVM clamps it); `occupancy=4` is −50% |
-| `nthreads=384 / I=96` | numerically wrong |
-| `MMQ_ITER_K=512` | numerically wrong |
-| `-ub` 512 / 1024 / 4096 | 1871 / 2335 / 2388 vs 2564 at 2048 — 2048 still optimal after all kernel changes |
-| `-b` 2048 / 4096 / 8192 | 2574 / 2567 / 2570 — no effect |
-| `-ctk f16 -ctv f16` instead of `q8_0` | 2584 vs 2590 — no prefill difference, so `q8_0` stays for the memory saving at long context |
-| `stream_k=true` **re-tested** after the `I=128→64` retune doubled the tile count | 1485 / 1947 vs 2011 / 2590 — still far worse, so the retune does not change that conclusion |
-| `J=96` at `I=32` (keeps 2 workgroups/CU where `I=64` drops to 1) | 1566 / 2041 — still worse; the mean expert width of 88 does not rescue it |
-| uneven `-ts` split across the two cards | model fails to load; the even layer split is effectively forced |
+Prefill is now **2697 t/s at pp16384** against 1775 upstream (**+51.9%**). The
+remaining profile at pp4096 (total ~5100 ms):
+
+| block | share | what it is |
+|---|---:|---|
+| MMQ expert matmuls | ~42% | already tuned; three config knobs swept |
+| rocBLAS dense GEMMs | ~19% | attention QKV/out, SSM out-proj, MoE router |
+| dequant + convert | ~5% | exists **only** to feed rocBLAS |
+| `mm_ids_helper<22>` | ~5% | fixed in change set 8 |
+| everything else | ~29% | long tail, nothing over 3% |
+
+The dense block is the only remaining concentration. It is **not** avoidable:
+those four shapes are the attention projections, the SSM output projection and
+the 512-way MoE router — all essential model computation.
+
+### Closed: route the dense GEMMs to MMQ
+
+Tested **three times**, at three different MMQ configurations, as the premise
+changed each time:
+
+| when | MMQ config | result |
+|---|---|---|
+| before stream-k fix | 512/I128, stream_k on | −6.5% |
+| after stream-k fix | 512/I128, stream_k off | −10.5% |
+| after tile retune | 256/I64, stream_k off | **−9.2%** |
+
+rocBLAS wins these shapes regardless of how MMQ is tuned. This option is closed.
+
+### Closed: per-shape Tensile solution override
+
+908 candidate kernels timed across the four shapes; none beat rocBLAS's default
+pick. See the section above.
+
+### Option A — fused dequantise + FP16 MFMA GEMM
+
+**The strongest remaining idea, and the only one that attacks two blocks at once.**
+
+Today the dense path does: dequantise Q4_K weights to FP16 into a scratch
+buffer, convert activations F32→F16, then `cublasGemmEx`. For the
+4096×8192 weight that is ~67 MB written and ~67 MB read back **per call, per
+ubatch**, plus 276 ms of kernel time that produces no arithmetic.
+
+A GEMM that dequantises inline from LDS would delete the conversion kernels and
+their HBM round-trip outright.
+
+- **Ceiling**: 276 ms of conversions (5.4%) plus whatever the improved locality
+  buys in the GEMM itself. Optimistically 8–12% end to end.
+- **Effort**: 4–8 weeks of specialist work — MFMA intrinsics, LDS
+  double-buffering, prefetch pipelining, split-k, per-shape tiling.
+- **Risk**: high. rocBLAS currently achieves 50–70% of the 181 TFLOPS peak on
+  these shapes (90.5 / 94.5 / 127.2 TFLOPS). Tensile has person-years of tuning
+  behind it; hand-written first attempts typically land at 40–60% of rocBLAS.
+  The dequant saving is real and certain, but it has to more than pay for
+  whatever the hand-written GEMM gives up.
+- **Note**: this is essentially what MMQ does, except MMQ uses int8. On CDNA2
+  int8 and FP16 MFMA have the *same* 181 TOPS peak, so MMQ pays quantisation
+  overhead for no throughput advantage — which is exactly why it loses here. An
+  FP16 variant does not have that handicap.
+
+### Option B — hipBLASLt directly
+
+llama.cpp has a hipBLASLt batched-GEMM path (PR #16457) gated to CDNA3.
+Extending it to CDNA2 would bypass rocBLAS's dispatch shim.
+
+- **Ceiling**: low. Routing through the shim measured **+0.2%**, and hipBLASLt
+  shares Tensile's kernel library.
+- **Effort**: 1–2 weeks including validation.
+- **Verdict**: poor ratio. Not recommended before Option A.
+
+### Option C — hand-written FP16 MFMA GEMM, no dequant fusion
+
+Option A minus its best justification. Same effort, smaller prize (~19% block
+rather than ~24%), same risk of losing to Tensile. **Not recommended** —
+if this work is done at all, do Option A.
+
+### Cheaper things worth doing first
+
+1. **Land the AMD rocBLAS switch** above — +2.7% for an environment variable.
+2. **Upstream PR [#25952](https://github.com/ggml-org/llama.cpp/pull/25952)**
+   (fused MoE expert reduction, +3.6–7.1% measured on CUDA) currently handles
+   `k = 2..15`; this model's `top_k = 22` exceeds the cap and falls back.
+   Extending the cap is far less work than any GEMM project.
+3. **Upstream PR [#26621](https://github.com/ggml-org/llama.cpp/pull/26621)**
+   (L2 cache-set aliasing, up to 20% on RDNA3.5, untested on CDNA2). The
+   dequantised FP16 buffers feeding rocBLAS alias whenever `ne00 % 1024 == 0`,
+   which is common here — and Option A would delete those buffers entirely, so
+   test this *before* committing to a GEMM rewrite.
+
+**Recommendation**: do the three cheap items. Treat Option A as a genuine
+project to be scheduled deliberately, not as a next step — and only after
+measuring #26621, which targets the same buffers Option A would remove and
+could change the arithmetic.
 
 ---
 
