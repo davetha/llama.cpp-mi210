@@ -726,6 +726,26 @@ Qwen3-Next uses that op, `llm_arch_is_hybrid()` returns true for it, and it is
 parallel here. The exclusion list is also not "every SSM/hybrid" — it carries
 GROK, MPT, DeepSeek2/3.2/4, T5, BitNet and others that have no SSM at all.
 
+**Verified, not assumed.** Reading a handler is not proof it is correct, and a
+wrong split does not crash — it yields fluent wrong text. Qwen3-Coder-Next-80B
+`Q4_K_M`, temperature 0, seed 1234, on 2× MI210:
+
+| | `-sm layer` | `-sm tensor` |
+|---|---|---|
+| generated text | *identical* | *identical* |
+| generation | 82.0 t/s | **57.6 t/s** |
+
+`diff` reports one changed line out of fourteen — the timing line. The
+single-segment AXIS_0 split of a fused output-plus-state buffer is sound.
+
+The second row is the part worth carrying forward: **tensor parallelism is 30%
+slower for single-stream decode.** TP pays per-layer collectives while `-sm
+layer` pipelines with no per-layer sync, and decode is latency-bound. So the
+~1.16× is a **prefill** number that arrives with a decode regression on the same
+switch — `-sm tensor` wants to be a per-workload choice, not a default. That
+also lines up with the reshape below putting its cost on decode and CPU while
+leaving SSD prefill untouched.
+
 The real difference is the **declared output shape**:
 
 | op | output shape | head axis |
@@ -824,6 +844,78 @@ quoted second-hand — see [Measured against vLLM](#measured-against-vllm-what-t
 | `cpy_scalar` | 2.4% | 122 |
 
 MMQ is ~42%; the rocBLAS dense path plus the conversions feeding it is ~23%.
+
+---
+
+## Half the model was in the wrong quant type, and fixing it barely helped
+
+`mul_mat_q<Q5_0>` and `mul_mat_q<Q8_0>` in that profile are not a choice anybody
+made. Dumping the tensor types with
+[`tools/gguf_quant_types.py`](tools/gguf_quant_types.py):
+
+| type | count | Gelem | share of weights |
+|---|---:|---:|---:|
+| Q4_K | 289 | 63.2 | 52.4% |
+| **Q8_0** | 20 | 28.2 | **23.4%** |
+| **Q5_0** | 20 | 28.2 | **23.4%** |
+| Q6_K | 25 | 1.0 | 0.8% |
+
+Every one of those 40 tensors is `ffn_down_exps.weight`, shape
+`[2688, 1024, 512]`. **2688 % 256 = 128**, so Q4_K's 256-element superblock does
+not divide it and `llama-quantize` silently downgrades — 20 to Q8_0, 20 to Q5_0.
+`ffn_up_exps` at `[1024, 2688, 512]` is unaffected: 1024 divides by 256. So a
+file labelled `Q4_K_M` carries 46.8% of its weights at 8.5 and 5.5 bits.
+
+The fix needs no kernel work — IQ4_NL has a CDNA MMQ kernel and a 32-element
+block, so 2688 divides fine:
+
+```
+llama-quantize --allow-requantize --tensor-type ffn_down_exps=iq4_nl in.gguf out.gguf Q4_K_M
+```
+
+`llama-quant.cpp` skips tensors already at the target type (`quantize =
+cur_type != new_type`), so the 289 Q4_K tensors are **copied verbatim** — this is
+not a lossy round-trip of the whole model.
+
+### The result, against a prediction that was 4× too high
+
+| | before | after | delta |
+|---|---:|---:|---:|
+| pp2048 | 1794.4 ± 2.2 | 1844.2 ± 1.8 | **+2.8%** |
+| pp16384 | 2704.4 ± 4.4 | 2755.4 ± 4.3 | **+1.9%** |
+| tg128 | 53.56 ± 0.20 | 54.98 ± 0.23 | **+2.7%** |
+| size | 80.13 GiB | 63.73 GiB | **−16.4 GiB** |
+| bpw | 5.70 | 4.54 | |
+
+I predicted ~9–11% on prefill from those kernels' 19.7% profile share. It is
+~2%. The gains are real and far outside the error bars — they are just small,
+and **the win here is memory, not speed.**
+
+Both halves of the misprediction were the same mistake — reading a *time* share
+as if it were *memory traffic*:
+
+- **Prefill.** At `ne11 = 2048` the expert GEMMs are **compute-bound**: each
+  weight is reused across 2048 columns, so that 19.7% is arithmetic, not bytes.
+  Halving bits-per-weight does not halve it. IQ4_NL's table-based dequant may
+  even cost slightly more per element than Q8_0's.
+- **Decode.** Bandwidth-bound, so a bigger win looked likely — but this is a
+  **sparse MoE**. Only 22 of 512 experts are read per token, so those 56.4 Gelem
+  contribute ~2.4 Gelem to per-token traffic, about 20% of the ~12B active
+  weights rather than the 46.8% they occupy on disk. That predicts ~8% of weight
+  traffic saved and ~2.7% observed once KV cache and attention are counted —
+  derivable in advance from the model's own `A12B-of-120B` name.
+
+This result also **weakens the fused-dequant idea** for the dense path, which was
+premised on saving the conversion traffic feeding rocBLAS. If the GEMM is
+compute-bound, that saves less than its profile share suggests — the same error.
+It **strengthens the grouped MoE GEMM**, which attacks tile utilisation at
+`n=88`, per-expert launch overhead and the combine tail: arithmetic and
+overhead, which is what is left when memory is not the constraint.
+
+**Not adoptable as measured.** This file was requantized from the already-
+quantized Q8_0/Q5_0 tensors and without an imatrix, where the original was an
+`i1-` build. Perplexity was not run, so nothing here says it is safe to serve. A
+real version requantizes from the BF16 source with an imatrix.
 
 ---
 
@@ -1001,6 +1093,9 @@ land at 40-60% of rocBLAS. **Do Option 1 first.**
 | hipBLASLt | present in AMD's rocBLAS; adds +0.2% over it |
 | crossing the attention MFMA gate at batch=2 ([`tools/bench_batch_mfma.py`](tools/bench_batch_mfma.py)) | gate crossed, no gain: 53.86 → 52.01 t/s aggregate. The kernel was not the constraint |
 | wave64-aware sequential SSM scan ([`tools/rejected/patch_ssm_scan_wave64.py`](tools/rejected/patch_ssm_scan_wave64.py)) | never applied — the premise was wrong (`c_factor` is warps-per-block *and* state-per-lane). The scan's 22.8% was removed by change set 4 instead |
+| per-expert `ncols_max` for MoE tile width ([`tools/rejected/patch_mmq_mmid_ncols_max.py`](tools/rejected/patch_mmq_mmid_ncols_max.py)) | **158 MUL_MAT_ID failures.** `ncols_max` also sizes the launch grid (`ntx = ceil(ncols_max / J)`), so it is a genuine worst-case bound, not a hint. Caught by the gate *before* benchmarking — an under-covered grid does less work and would have looked like a win |
+| CUDA graphs for large-batch `MUL_MAT_ID` ([`[TAG_MUL_MAT_ID_CUDA_GRAPHS]`](https://github.com/ggml-org/llama.cpp/pull/18958)) | not attempted: one stream sync per MoE layer per ubatch is ~400 syncs on a 16k prefill, low single-digit **ms** against ~6 s of work. Graphs already work at decode, where `ne2` takes the mmvq path |
+| smaller MMQ tiles for `n=88` | not a missing width — CDNA already offers J = 16/32/48/64 and `mul_mat_q_switch_J` picks adaptively. The chooser is correctly given the worst-case bound; see the row above |
 
 ---
 
