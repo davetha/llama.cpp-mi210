@@ -164,13 +164,23 @@ fill a GPU that has too few output tiles to saturate it. In an MoE prefill each
 expert already produces many tiles, so the fixup pass and the extra
 global-memory traffic for partial accumulators are pure overhead.
 
-Scoped to the K-quants (Q2_K–Q6_K, 35 entries), which is what an `i1-Q4_K_M`
-model dispatches; leaving other types alone keeps the result attributable.
+Originally scoped to the K-quants, on the assumption that an `i1-Q4_K_M` model
+dispatches nothing else. **The profile disproved that.** The three hottest MMQ
+kernels are types 12, 6 and 8 — `Q4_K`, **`Q5_0` and `Q8_0`** — and the latter
+two are 27.4% of prefill GPU time on their own.
 
-| | before | after |
+`Q5_0`/`Q8_0` appear in a `Q4_K_M` model because `llama-quant.cpp` silently
+downgrades any tensor whose column count is not divisible by `QK_K`=256:
+`Q4_K → Q5_0`, `Q6_K → Q8_0`. Nemotron-3-Super's Mamba-2 projection widths
+frequently are not, so a large slice of the model is not K-quantised at all.
+
+The hypothesis is about workload shape (MoE, many tiles per expert), not about
+any property of a quant, so this covers **every** type in the table.
+
+| | K-quants only | all types |
 |---|---:|---:|
-| pp4096 | 1624 t/s | **1684 t/s** (+3.7%) |
-| pp16384 | 2114 t/s | **2192 t/s** (+3.7%) |
+| pp4096 | 1684 t/s (+3.7%) | **1834 t/s (+13.0%)** |
+| pp16384 | 2192 t/s (+3.7%) | **2374 t/s (+12.3%)** |
 
 **Stated plainly:** the stream-k/MoE evidence is from RDNA3.5/RDNA4, *not*
 CDNA2, and no CDNA stream-k benchmark exists upstream. This was an experiment
@@ -184,115 +194,174 @@ came back **6.5% slower** and was discarded.
 
 ---
 
-## Combined result (change sets 4 + 5)
+### 6. Retune the CDNA MMQ tile: `nthreads=256`, `I=64`  → [`patches/06-mmq-cdna-tile-retune.patch`](patches/06-mmq-cdna-tile-retune.patch)
+
+**+6.5% prompt processing.**
+
+`mmq-config-cdna.cuh` has **never been tuned on CDNA hardware.** PR
+[#24127](https://github.com/ggml-org/llama.cpp/pull/24127) refactored the MMQ
+configuration into per-arch tables and transcribed the CDNA values from
+pre-refactor blanket-AMD constants:
+
+| field | value | where it came from |
+|---|---|---|
+| `nthreads=512` | 8 waves × 64 | `mmq_get_nwarps_host`: `amd_mfma_available(cc) ? 8 : …` — tuned for gfx942/MI300 |
+| `I=128` | | `get_mmq_y_host`: `GGML_CUDA_CC_IS_AMD(cc) ? (RDNA1 ? 64 : 128)` — a **catch-all AMD value** spanning GCN through CDNA4 |
+| `occupancy=1` | | changed from the pre-refactor `2`; CDNA is the only arch whose value moved |
+
+The only AMD GPUs benchmarked in that PR were MI100, RX 6800 and a Radeon
+8060S. No MI210, MI250 or MI300 numbers appear anywhere in it, and the reviewer
+noted it was "pretty easy for this to have some regressions on some arch by
+accident."
+
+On gfx90a the smaller tile is simply better:
+
+| | pp4096 | pp16384 |
+|---|---:|---:|
+| `nthreads=512, I=128` (upstream) | 1834 t/s | 2374 t/s |
+| **`nthreads=256, I=64`** | **1962 t/s** | **2529 t/s** |
+| `nthreads=128, I=32` | 1835 t/s | 2370 t/s |
+
+It also halves LDS per workgroup — 48.2 KiB → 28.2 KiB for the Q8_1 layout
+against a 64 KiB budget — which is what makes two workgroups per CU feasible at
+all, and what makes change set 7's larger `J` fit if anyone revisits it.
+
+#### Two invariants that make this dangerous to tune
+
+**`I` is not an independent knob.** `mmq-vec-dot.cuh` hardcodes
+`rows_per_warp = 16` on the MFMA path and has no loop over the row index, so the
+I-extent is covered exactly by the block's warps:
+
+> **On CDNA, `I == (nthreads/64) * 16 == nthreads/4`.**
+
+Changing one without the other does not error. It silently computes a partial
+tile — and it benchmarks *faster*, because it is doing less work:
+
+| config | pp4096 | MUL_MAT fails | MUL_MAT_ID fails |
+|---|---:|---:|---:|
+| `I=64` with `nthreads=512` | 2374 | **362** | **637** |
+| `nthreads=256` with `I=128` | 2268 | **11** | **595** |
+| `nthreads=256, I=64` (paired) | 1962 | 0 | 0 |
+
+The two mismatched configs were the fastest numbers measured in the entire
+sweep. Both were wrong.
+
+**`I` must also divide 128.** `mmq.cuh` selects the out-of-bounds fallback from
+a hardcoded `args.nrows_x % 128 == 0` rather than from `config.I`. So
+`nthreads=384 / I=96` satisfies `I == nthreads/4` and still fails MUL_MAT on
+every quant type, with errors of 0.09–0.44 against a 5e-4 tolerance,
+reproducibly. **Valid `I` values are 32, 64 and 128.**
+
+#### Knobs that turned out to be dead or harmful
+
+- **`occupancy` does nothing at `nthreads=512`.** It feeds the second
+  `__launch_bounds__` argument, which on HIP is `MIN_WARPS_PER_EXECUTION_UNIT`
+  (not CUDA's `minBlocksPerMultiprocessor`). LLVM clamps a request below the
+  default derived from the workgroup size, so `1` and `2` compile identically.
+  Measured: 1836 vs 1834 t/s. It only becomes live below 512 threads, and at
+  `nthreads=256` it still measured flat (1962 vs 1966).
+- **`J=128` is 26% slower, `J=96` is 22% slower** — both numerically correct.
+  CDNA's table stops at `J=64` while Ampere/Blackwell/RDNA4 reach 128; that cap
+  turns out to be right for gfx90a, corroborating aviallon's MI210 measurements
+  in PR [#21849](https://github.com/ggml-org/llama.cpp/pull/21849). LDS was
+  never the constraint — `J=128` fits in 37.5 KiB.
+- **`MMQ_ITER_K` 256 → 512** benchmarks +25% at pp16384 (3238 t/s) and fails
+  263 MUL_MAT / 541 MUL_MAT_ID tests. Another fast-and-wrong.
+
+---
+
+### 7. SSD chunk size 256 → 128 for CDNA  → [`patches/07-ssd-chunk-size-cdna.patch`](patches/07-ssd-chunk-size-cdna.patch)
+
+**+2.5% prompt processing.**
+
+`SSM_SSD_CHUNK_SIZE` is a compile-time `#define` in `ssm-scan.cu`, set to 256
+and tuned against cuBLAS on NVIDIA. rocBLAS on gfx90a prefers half that:
+
+| chunk | pp4096 | pp16384 |
+|---|---:|---:|
+| 64 | 1932 | 2459 |
+| **128** | **2013** | **2588** |
+| 192 | 2005 | 2579 |
+| 256 (upstream) | 1964 | 2529 |
+| 512 | 1867 | 2406 |
+
+All five are numerically correct; this is a pure throughput choice. The curve is
+flat between 128 and 192 and falls off sharply either side.
+
+---
+
+## Combined result (change sets 4–7)
 
 `llama-bench`, 2× MI210, Nemotron-3-Super-120B-A12B `i1-Q4_K_M`,
-`-b 4096 -ub 2048 -fa 1 -sm layer -ctk q8_0 -ctv q8_0 -t 24 -r 2`:
+`-b 4096 -ub 2048 -fa 1 -sm layer -ctk q8_0 -ctv q8_0 -t 24`:
 
-| build | pp4096 (t/s) | pp16384 (t/s) | vs base |
+| build | pp4096 | pp16384 | vs base |
 |---|---:|---:|---:|
 | upstream `67b9b0e` | 1366 | 1775 | — |
-| + SSD on CDNA | 1624.07 ± 0.81 | 2114.21 ± 0.73 | +19.1% |
-| + stream-k off | 1683.57 ± 0.40 | **2192.26 ± 0.84** | **+23.5%** |
+| + SSD on CDNA (4) | 1624 | 2114 | +19.1% |
+| + stream-k off, K-quants (5) | 1684 | 2192 | +23.5% |
+| + stream-k off, all types (5) | 1834 | 2374 | +33.7% |
+| + MMQ tile retune (6) | 1962 | 2529 | +42.5% |
+| **+ SSD chunk 128 (7)** | **2013** | **2590** | **+45.9%** |
 
-For reference, vLLM with its AITER fast paths reaches 4,070 t/s at 16k on the
-same hardware with an AWQ-INT4 Nemotron. These changes narrow the gap from
-2.29× to 1.86×; they do not close it.
+Total GPU kernel time at pp4096 fell from 7703 ms to 5331 ms (−31%).
 
----
+vLLM with its AITER fast paths reaches 4,070 t/s at 16k on the same hardware
+with an AWQ-INT4 Nemotron. The gap narrows from **2.29× to 1.57×**. Still open.
 
-## Verifying correctness
+### Profile evolution (pp4096)
 
-Both change sets were gated on **reading generated tokens**, not only on the
-benchmark number. This is not ceremony: a fast kernel emitting garbage already
-cost this project one published benchmark.
-
-The specific risk in change set 4 is that the SSD path chains batched GEMMs with
-`beta=1` accumulation for inter-chunk state propagation and materialises a
-causal decay mask in a helper kernel. A wrong transpose flag, stride, or
-alpha/beta does not crash — it propagates a subtly wrong SSM state and yields
-fluent, confident, **wrong** text.
-
-Procedure: `llama-server` at `temperature 0` with a 240-token prompt (past the
-128-token SSD threshold), asking the model to explain why prefill is
-compute-bound and decode is bandwidth-bound. The answer had to use the figures
-supplied in the prompt correctly — something a corrupted SSM state would not do.
-Multi-request runs were done on a single card because of the pre-existing fault
-below; single-request verification was done on both cards.
+| | upstream | after 4–7 |
+|---|---:|---:|
+| total GPU kernel time | 7703 ms | 5331 ms |
+| SSM scan | 22.8% (1759 ms) | 1.3% (68 ms) |
+| quantized GEMM (MMQ) | 45.2% | 42.4% (2260 ms) |
+| rocBLAS `Cijk_*_HSS_*` | ~13% | ~18% (959 ms) |
+| `mm_ids_helper` | 4.5% | 6.7% (359 ms) |
+| flash attention | 0.9% | 1.3% |
 
 ---
 
-## Known pre-existing issue: multi-GPU fault on sequential requests
+## A note on measuring these changes
 
-**Not caused by change sets 4 or 5**, but you will hit it, so it is recorded here.
+Four separate configurations in this work benchmarked **faster while computing
+wrong results**, three of them by a wide margin:
 
-Running `llama-server` across both MI210s (`-sm layer`), the *second* sequential
-request faults:
-
-```
-Memory access fault by GPU node-1 (Agent handle: 0x...) on address 0x... Reason: Unknown.
-```
-
-The first request returns correct output; the next one launches
-(`slot launch_slot_: id 3 | task 263`) and the GPU faults. The process survives
-and keeps answering `/health` with `ok`, so it looks alive while being unable to
-serve — which makes it easy to misdiagnose.
-
-Isolated by bisecting configuration rather than assuming:
-
-| build | GPUs | result |
+| config | apparent gain | reality |
 |---|---|---|
-| upstream `67b9b0e`, unpatched | 2 | **faults on request 2** |
-| + SSD | 2 | faults on request 2 |
-| + SSD + stream-k off | 2 | faults on request 2 |
-| + SSD | 1 (`ROCR_VISIBLE_DEVICES=0`, `-ngl 62`) | 3 sequential requests clean |
+| `I=64` alone | +29% | 362 + 637 test failures |
+| `nthreads=256` alone | +23% | 11 + 595 test failures |
+| `nthreads=384 / I=96` | +2% | fails every quant type |
+| `MMQ_ITER_K=512` | +25% | 263 + 541 test failures |
 
-Since the **unpatched baseline faults identically**, this is pre-existing on
-this tree and unrelated to either change set. It is specific to the multi-GPU
-split; the same build on a single card handles repeated requests without
-incident.
+The fastest number measured in the entire session was wrong. Anything that
+breaks a tiling invariant does less work, and doing less work looks exactly like
+an optimisation on a throughput chart.
 
-`llama-bench` does not surface it across many prefills, which points at state
-reuse between requests rather than any prefill kernel — and means the throughput
-numbers above are unaffected.
+Two practical consequences:
 
-Not root-caused. A good starting point is bisecting llama.cpp between `67b9b0e`
-and current master with a two-request `llama-server` script on two cards.
+1. **`test-backend-ops -o MUL_MAT` / `MUL_MAT_ID` / `SSM_SCAN` before any
+   benchmark is believed**, then generated tokens at `temperature 0` on top.
+2. **Count failures with a plain `grep FAIL`.** The harness prints them as
+   `[MUL_MAT] ERR = 0.128 > 0.0005   MUL_MAT(...): FAIL` — a pattern anchored to
+   leading whitespace matches nothing and reports a clean run for a broken
+   build. That happened here and briefly cleared a config that was in fact fine,
+   but the same mistake in the other direction is what ships corruption.
 
 ---
 
-## Tested and rejected (change sets 4–5)
-
-Recorded so they are not re-attempted.
+## Tested and rejected (change sets 6–7)
 
 | change | result |
 |---|---|
-| Extend CDNA3's rocBLAS carve-out to CDNA2 in `mmq.cu` (`ggml_cuda_should_use_mmq` true for Q4_K/Q5_K at any `ne11`) | **6.5% slower** (1277 vs 1366 t/s at pp4096). rocBLAS genuinely beats MMQ at `ne11=2048` on gfx90a. |
-| `ROCBLAS_USE_HIPBLASLT=1` | no-op |
-| `-sm row` | unsupported on ROCm |
-| Crossing the attention MFMA gate by batching (`fattn.cu` needs `Q->ne[1] * gqa_ratio > 16`; Nemotron's ratio is exactly 16 at batch 1) | no gain; flash attention is only 0.9% of prefill |
-| `-ub 4096` | slower than 2048 |
-| `-ub 1024` | better at pp4096, worse at pp16384 |
-| W4A8 weights | dead end on CDNA2 twice over: `mfma.i32.16x16x32.i8` (K=32) is MI300-only and fails to select on gfx90a, and CDNA2 gives INT8 and BF16 the *same* 181 TOPS peak, so there is no throughput to win |
-| Making `ssm_scan_f32_group` wavefront-aware (it indexes lanes with the hardcoded `WARP_SIZE` 32 while gfx90a's wavefront is 64, so `warp_reduce_sum` takes a slow path once per token) | abandoned: `c_factor` serves double duty as warps-per-block *and* state-elements-per-lane, so changing it requires reworking the grid too or `state[]` reads out of bounds. Change set 4 makes it moot for prefill — the scalar kernel now only handles sequences under 128 tokens. |
-
-Confirmed already optimal at base, so not worth revisiting: MMQ already uses
-int8 MFMA (`mfma_i32_16x16x16i8` via `AMD_MFMA_AVAILABLE`), CUDA graphs are
-active (188 graph reuses per request), `GGML_HIP_MMQ_MFMA=ON`.
-
----
-
-## What is left
-
-MMQ is now 53.3% of prefill and is the obvious next target:
-
-1. **Retune `SSM_SSD_CHUNK_SIZE`** (256) for rocBLAS's kernel-selection sweet
-   spots on gfx90a.
-2. **Extend the stream-k experiment** beyond K-quants, and sweep the other MMQ
-   config fields (`nthreads`, `occupancy`, `I`/`J` tile shape) for CDNA2 — one
-   shared CDNA config file is unlikely to suit all three CDNA generations.
-3. **`mm_ids_helper`** was 4.5% at base; re-measure its share now.
-4. Root-cause the multi-GPU fault above.
+| Force MMQ for the dense FP16 GEMMs, **retested** after the stream-k fix removed the original objection | still slower: 1642 vs 1834 t/s (−10.5%). rocBLAS genuinely wins these shapes on gfx90a. Two independent negative results now. |
+| `J=128` / `J=96` CDNA entries | −26% / −22%, both correct |
+| `occupancy` 2 or 4 | flat at 512 threads (LLVM clamps it); `occupancy=4` is −50% |
+| `nthreads=384 / I=96` | numerically wrong |
+| `MMQ_ITER_K=512` | numerically wrong |
+| `-ub` 512 / 1024 / 4096 | 1871 / 2335 / 2388 vs 2564 at 2048 — 2048 still optimal after all kernel changes |
+| `-b` 2048 / 4096 / 8192 | 2574 / 2567 / 2570 — no effect |
+| `-ctk f16 -ctv f16` instead of `q8_0` | 2584 vs 2590 — no prefill difference, so `q8_0` stays for the memory saving at long context |
 
 ---
 
@@ -305,13 +374,13 @@ fork at:
 c26cbdffcf6fc9b7430cd6b117757e9a3f70b7ea  Merge pull request #225 from TheTom/fix-ui-assets-partial-dist
 ```
 
-Change sets **4-5** are generated against **upstream `ggml-org/llama.cpp`** at:
+Change sets **4-7** are generated against **upstream `ggml-org/llama.cpp`** at:
 
 ```
 67b9b0e7f6ce45d929a4411907d3c48ec719e81c  llama-arch: fix DeepSeek4 APE tensor op (#25945)
 ```
 
-These are different bases. Change sets 4-5 were developed and measured on the
+These are different bases. Change sets 4-7 were developed and measured on the
 upstream tree, **not** on the TurboQuant fork, and have not been tested there —
 `ssm-scan.cu` in particular changed substantially upstream in the interim, so
 expect `patches/04-*` to need rebasing before it applies to the fork. The two
@@ -331,7 +400,7 @@ git apply 03-turboquant-wave64-fixes.patch
 # build for gfx90a (see BUILD.md)
 ```
 
-Change sets 4-5 target upstream llama.cpp instead (see "Base commit" above):
+Change sets 4-7 target upstream llama.cpp instead (see "Base commit" above):
 
 ```bash
 git clone https://github.com/ggml-org/llama.cpp.git
@@ -339,6 +408,8 @@ cd llama.cpp
 git checkout 67b9b0e7f6ce45d929a4411907d3c48ec719e81c
 git apply patches/04-ssd-mamba2-prefill-cdna.patch
 git apply patches/05-mmq-cdna-no-streamk.patch
+git apply patches/06-mmq-cdna-tile-retune.patch
+git apply patches/07-ssd-chunk-size-cdna.patch
 cmake -B build -DGGML_HIP=ON -DAMDGPU_TARGETS=gfx90a -DGGML_HIP_MMQ_MFMA=ON \
       -DCMAKE_BUILD_TYPE=Release
 cmake --build build --target llama-bench llama-server test-backend-ops -j
