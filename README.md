@@ -8,7 +8,7 @@ This repo does **not** contain the full llama.cpp tree (too large to mirror here
 patches/          — apply these on top of the upstream fork
 modified-files/   — the exact modified files (drop-in replacements)
 tools/            — patch/revert scripts and the rocprofv3 trace analyser
-tests/            — KIVI2 correctness tests
+tools/rejected/   — patches that were tried and lost, kept with their verdicts
 BUILD.md          — how to build for gfx90a in Docker
 ```
 
@@ -935,11 +935,13 @@ land at 40-60% of rocBLAS. **Do Option 1 first.**
 
 | idea | outcome |
 |---|---|
-| route dense GEMMs to MMQ | tested 3x at 3 different MMQ configs: -6.5%, -10.5%, -9.2% |
-| per-shape Tensile solution override | 908 candidate kernels timed, none beat the default |
-| `J=96` matching the 88-token mean expert width | -22% at `I=64`; still worse at `I=32` where occupancy is preserved |
+| route dense GEMMs to MMQ ([`tools/rejected/patch_mmq_cdna2_large_ne11.py`](tools/rejected/patch_mmq_cdna2_large_ne11.py)) | tested 3x at 3 different MMQ configs: -6.5%, -10.5%, -9.2% |
+| per-shape Tensile solution override ([`tools/rocblas_solution_tune.cpp`](tools/rocblas_solution_tune.cpp)) | 908 candidate kernels timed, none beat the default |
+| `J=96` / `J=128` tiles ([`tools/patch_mmq_cdna_add_j128.py`](tools/patch_mmq_cdna_add_j128.py)) | `J=96` matches the 88-token mean expert width and still lost: -22% at `I=64`, worse at `I=32` where occupancy is preserved |
 | larger ubatch for better expert shape | `-ub 4096` is 7% slower |
 | hipBLASLt | present in AMD's rocBLAS; adds +0.2% over it |
+| crossing the attention MFMA gate at batch=2 ([`tools/bench_batch_mfma.py`](tools/bench_batch_mfma.py)) | gate crossed, no gain: 53.86 → 52.01 t/s aggregate. The kernel was not the constraint |
+| wave64-aware sequential SSM scan ([`tools/rejected/patch_ssm_scan_wave64.py`](tools/rejected/patch_ssm_scan_wave64.py)) | never applied — the premise was wrong (`c_factor` is warps-per-block *and* state-per-lane). The scan's 22.8% was removed by change set 4 instead |
 
 ---
 
