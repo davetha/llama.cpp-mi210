@@ -607,7 +607,7 @@ by head, keeping all four consistent with how `ssm_out` and the SSM state caches
 are split. The Qwen3Next branch in `get_split_segments` is a direct template for
 this.
 
-**Estimate: days, not weeks, and confined to one file** (`src/llama-model.cpp`),
+**Estimate (superseded -- see the verdict section below, which supersedes this): days, not weeks, and confined to one file** (`src/llama-model.cpp`),
 with `test-backend-ops` plus generated-token checks as the gate. That is far
 cheaper than the "implement split buffers for the CUDA/HIP backend" framing in
 the previous revision, which was based on the wrong mechanism.
@@ -622,6 +622,103 @@ latency matters most.
 
 It would also benefit every multi-GPU ROCm *and* CUDA user running a hybrid
 model, not just this box, since the exclusion list is backend-agnostic.
+
+---
+
+## Tensor parallelism for Mamba-2 hybrids: why it is a framework redesign, not a patch
+
+Three options were considered for making `-sm tensor` work on Mamba-2 hybrid
+architectures. All three were investigated to the point of a definite answer,
+and **none is a viable fork-level change.** The blocker is a design limitation
+in ggml's split-state model, not anything specific to Nemotron.
+
+### What was built and how far it got
+
+On branch `tp-nemotron`, each fix exposing the next layer:
+
+| step | blocker | resolution |
+|---|---|---|
+| 1 | SIGFPE, `granularity_q / n_gqa` with `n_gqa == 0` | fixed, **landed on main** as change set 11 |
+| 2 | tensor write out of bounds | full Nemotron-H tensor split table |
+| 3 | ADD mismatch on `ssm_conv1d.bias` | bias needs the conv weight's segmentation |
+| 4 | `SSM_SCAN` refused any dimensional split | wrote `handle_ssm_scan`; the op now passes |
+| 5 | ADD mismatch on `mamba2_y_add_d` | **the wall** |
+
+### The wall, stated precisely
+
+`ggml_ssm_scan` returns **one** 1-D tensor holding two concatenated regions:
+
+```c
+result = ggml_new_tensor_1d(ctx, F32,
+             ggml_nelements(x) + s->ne[0]*s->ne[1]*s->ne[2]*ids->ne[0]);
+       =  y( head_dim * n_head * n_seq_tokens * n_seqs )
+       ++ states( d_state * head_dim * n_head * n_seqs )
+```
+
+Both regions are linear in `n_head`, so a single-segment proportional split is
+**numerically exact in size** — device *j* gets `n_head_j / n_head` of the
+buffer. SSM_SCAN itself passes with that description.
+
+It is nonetheless **wrong in layout**. Device *j* owns its heads' slice of `y`
+*and* its heads' slice of the states — two disjoint regions of the logical
+tensor, not a contiguous prefix. `handle_reshape` then sees a 1-D source split
+on its last axis, applies the (correct in general) rule "flat split maps to the
+view's outermost dim", and hands the `y` view an axis that disagrees with the
+`x*D` operand it is added to:
+
+```
+[TPOP] UNKNOWN op=ADD name=mamba2_y_add_d-0
+    src0 node_35 (view)  axis=2   <- y viewed out of the fused result
+    src1 node_45         axis=1   <- x*D, split by head
+```
+
+The two-segment description does carry the missing information. It is rejected
+before any view sees it: the post-pass that reconciles an op output against its
+sources asserts `n_segments == 1`.
+
+### Why each option fails as a fork-level change
+
+**Option 1 — let op outputs carry multi-segment split state.** Not confined to
+the post-pass. `n_segments == 1` is asserted or required at **11 sites**
+spanning `handle_reshape`, `handle_permute`, `handle_transpose`, the post-pass,
+the split-state cache, and all four data-movement paths
+(`buffer_set_tensor`, `buffer_get_tensor`, `set_tensor_async`,
+`get_tensor_async`). That is the core of the meta backend, and it is code that
+currently works for every supported architecture — so the regression risk lands
+on Qwen3Next, DeepSeek and the rest, with silent numerical wrongness as the
+failure mode.
+
+**Option 2 — return `y` and the states as separate tensors.** Changes a public
+ggml op contract. Seven backends implement SSM_SCAN and each writes the fused
+buffer at computed offsets (CUDA, CPU, SYCL, Vulkan, WebGPU, ET, meta), plus
+four callers, the tests, and `ggml.h`. In a fork this also means permanent
+divergence on a core op, so every future rebase fights it.
+
+**Option 3 — special-case the view of an SSM_SCAN result.** Cannot work. Even if
+the view recovered the head axis for `y`, the state region at `s_off` is still
+described by the same false "contiguous prefix" premise. The information is
+missing from the split state itself, not merely mis-propagated by the view.
+
+### Conclusion
+
+This is worth an upstream issue rather than a fork patch: ggml ops with fused
+multi-region outputs cannot be tensor-split under the current single-segment
+model, which is exactly why every SSM/hybrid architecture sits on the
+`llm_arch_supports_sm_tensor` exclusion list. The fix belongs with whoever owns
+the split-state design, because it is a change to that model.
+
+Everything up to the wall is banked on `tp-nemotron` and is directly reusable if
+the framework gains multi-segment op outputs: the Nemotron-H tensor split table
+and `handle_ssm_scan` would both stand. The one piece that was independently
+correct — the `n_gqa == 0` divide-by-zero — is already on `main` and is worth
+sending upstream on its own.
+
+### What this leaves on the table
+
+The measured prize was ~1.16x at 16k and more at short context, from closing the
+utilisation gap (llama.cpp 85.6% aggregate at 16k and 62% at 4k, against vLLM
+TP=2 holding both cards at 99.4%/99.6% simultaneously). That remains unclaimed,
+and on this codebase it is not claimable without upstream work.
 
 ---
 
