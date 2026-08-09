@@ -134,7 +134,54 @@ fluent, confident, wrong text.
 
 Procedure used: `llama-server`, `temperature 0`, a prompt of 240 tokens (past
 the 128-token SSD threshold), and read the answer for technical correctness —
-not merely for well-formed prose.
+not merely for well-formed prose. The model was asked to explain why prefill is
+compute-bound and decode is bandwidth-bound; the answer had to use the figures
+given in the prompt correctly, which a corrupted SSM state would not do.
+
+Because of the multi-GPU fault documented below, the multi-request correctness
+runs were done on a single card (`ROCR_VISIBLE_DEVICES=0`, `-ngl 62`, remaining
+layers on CPU). Three sequential requests returned correct prose and correct
+Python. Single-request verification was additionally done on both cards.
+
+## Known pre-existing issue: multi-GPU fault on sequential requests
+
+**Not caused by these patches**, but you will hit it, so it is documented here.
+
+Running `llama-server` across both MI210s (`-sm layer`), the *second* sequential
+request faults:
+
+```
+Memory access fault by GPU node-1 (Agent handle: 0x...) on address 0x... Reason: Unknown.
+```
+
+The first request completes and returns correct output; the next one launches
+(`slot launch_slot_: id 3 | task 263`) and the GPU faults. The server process
+survives and keeps answering `/health` with `ok`, so it looks alive while being
+unable to serve.
+
+Isolated by bisecting configuration rather than assuming:
+
+| build | GPUs | result |
+|---|---|---|
+| base `67b9b0e`, unpatched | 2 | **faults on request 2** |
+| + SSD | 2 | faults on request 2 |
+| + SSD + stream-k off | 2 | faults on request 2 |
+| + SSD | 1 (`ROCR_VISIBLE_DEVICES=0`, `-ngl 62`) | 3 sequential requests clean |
+
+Since the unpatched baseline faults identically, this is pre-existing on this
+tree and unrelated to the SSD or stream-k changes. It is specific to the
+multi-GPU split: the same build on a single card handles repeated requests
+without incident.
+
+`llama-bench` does **not** surface it — it ran many prefills across both cards
+without a fault — which suggests the problem is in state reuse between requests
+rather than in any prefill kernel. That also means benchmark results here are
+unaffected, and it is why correctness was additionally verified on a single
+card.
+
+Not yet root-caused. Anyone picking this up should start by bisecting llama.cpp
+between `67b9b0e` and current master with a two-request `llama-server` script on
+two cards.
 
 ## Tested and rejected
 
