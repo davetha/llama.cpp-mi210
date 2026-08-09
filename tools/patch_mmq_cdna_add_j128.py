@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
 """Add J=128 MMQ tile entries to the CDNA config table.
 
+VERDICT: the wider tiles LOST. This is kept as a sweep vehicle, not as a change
+to apply -- neither J=128 nor J=96 beat the shipped J=64. J=96, which matches
+the 88-token mean expert width and so looked like the obvious fit, came in -22%
+at I=64 and was still worse at I=32 where occupancy is preserved. The tile width
+that wins on this architecture is the one already there. See "Closed, with
+evidence" in the README.
+
 WHY. `mul_mat_q_switch_J` (mmq.cuh) picks the tile width J at runtime:
 
     for (int J = 8; J <= 128 && ntiles_J_best > 1; J += 8) {
