@@ -507,6 +507,124 @@ separate tests).
 
 ---
 
+### 11. Do not divide by `n_gqa` when a layer has no attention heads  → [`patches/11-tp-ngqa-div0.patch`](patches/11-tp-ngqa-div0.patch)
+
+An upstream bug, found while investigating tensor parallelism. `get_split_granularity`
+in `llama-model.cpp` computes
+
+```c
+const int64_t granularity_kv = granularity_q / n_gqa;
+```
+
+unconditionally in its regular-attention branch, **before** the tensor is known
+to be a KV tensor. In a hybrid model a pure FFN/MoE block has no attention
+heads, so `hparams.n_gqa(il)` is 0 and any FFN tensor in such a layer divides by
+zero.
+
+Reproduced with `LLAMA_SPLIT_MODE_TENSOR` on `nemotron_h_moe`: SIGFPE inside
+`llama_meta_device_get_split_state` while allocating
+`blk.1.ffn_down_exps.weight`.
+
+Unreachable today because every hybrid architecture is on the
+`llm_arch_supports_sm_tensor` exclusion list, but the expression is wrong
+regardless of which architectures are enabled, and it blocks anyone extending
+that list. No behaviour change for architectures that already support
+`-sm tensor` — their layers all have `n_gqa != 0`. **Worth sending upstream on
+its own.**
+
+---
+
+## Tensor parallelism: it exists, and here is exactly what is missing
+
+An earlier revision of this document concluded that llama.cpp cannot do tensor
+parallelism on ROCm, because `-sm row` fails with `does not support split
+buffers` and only the SYCL backend implements `ggml_backend_split_buffer_type`.
+**That conclusion was right about `-sm row` and wrong about the capability.**
+
+`-sm row` was deliberately removed in
+[74976e1ae / PR #24216](https://github.com/ggml-org/llama.cpp/pull/24216)
+("CUDA: remove -sm row, refactor cuBLAS", 2026-07-06, 16 days before this
+tree's base commit). The stated reason:
+
+> This PR removes CUDA backend support for split buffers (`--split-mode row`) —
+> by now `-sm tensor` has all of the necessary features to make it obsolete.
+
+So the replacement is **`-sm tensor`** (`LLAMA_SPLIT_MODE_TENSOR`), and it is
+present in this tree.
+
+### How it works
+
+Not via split buffers. `llama_prepare_model_devices` builds a **meta device**
+(`ggml_backend_meta_device`) wrapping the N real GPUs, with a callback,
+`llama_meta_device_get_split_state`, that decides how each tensor is sharded.
+
+That callback is **generic and pattern-based**: it matches tensor names by regex
+and assigns a split axis — column-parallel (`AXIS_1`) paired with row-parallel
+(`AXIS_0`), the classic TP arrangement, with `MIRRORED` for replicated tensors
+and `PARTIAL` for a few special cases. Unmatched tensors default to `MIRRORED`,
+which is safe but redundant.
+
+It already understands SSM tensors (`ssm_out`, `ssm_conv1d`, `ssm_dt`, `ssm_a`,
+`ssm_alpha`/`beta`, `cache_r`, `cache_s`) **and** MoE experts (`ffn_up_exps`,
+`ffn_gate_exps`, `ffn_down_exps`). It also carries a worked example of a
+fused-projection architecture: Qwen3Next / Qwen3.5 get bespoke segmentation for
+their fused QKV and their `n_v_heads > n_k_heads` broadcasting.
+
+### Why this model is excluded
+
+`llm_arch_supports_sm_tensor` is an **exclusion list** — TP is on by default and
+these opt out. Every SSM/hybrid architecture is on it: `MAMBA`, `MAMBA2`,
+`JAMBA`, `FALCON_H1`, `NEMOTRON_H`, `NEMOTRON_H_MOE`, `GRANITE_HYBRID`, `LFM2`,
+`LFM2MOE`, `KIMI_LINEAR`, plus `DEEPSEEK2/32/4`, `GROK`, `T5` and others.
+
+Removing `NEMOTRON_H_MOE` from that list and building gets:
+
+1. **SIGFPE** in the split callback — the `n_gqa == 0` division above. Fixed in
+   change set 11.
+2. **`GGML_ASSERT(offset + ... <= ggml_nbytes(tensor) && "tensor write out of
+   bounds")`** in `ggml-backend.cpp:371` — the sharding arithmetic does not
+   handle this architecture's tensor shapes.
+
+So the exclusion is not arbitrary, but it is also not fundamental. The blocker
+is a set of missing split rules, not a missing mechanism.
+
+### What implementing it would take
+
+Nemotron-3-Super's tensors, and what each needs:
+
+| tensor | shape | status |
+|---|---|---|
+| `attn_q/k/v/output` | 2D | already matched |
+| `ffn_up_exps` / `ffn_down_exps` | **3D** `[2688, 1024, 512]` | matched by pattern, but the shard arithmetic overruns — 3D expert tensors need handling |
+| `ssm_in` | `[4096, 18560]` | **unmatched** — fused `z\|x\|B\|C\|dt` (8192+8192+1024+1024+128), needs multi-segment splitting exactly like Qwen3Next's fused QKV |
+| `ssm_out` | `[8192, 4096]` | already matched (`AXIS_0`) |
+| `ffn_latent_down` / `ffn_latent_up` | `[4096,1024]` / `[1024,4096]` | **unmatched** — the LatentMoE wrapper around the experts |
+| `ssm_norm`, `exp_probs_b`, `ffn_gate_inp` | small | default `MIRRORED` is probably correct |
+
+The `ssm_in` case is the substantial one: splitting a Mamba-2 fused projection
+means splitting `z` and `x` by inner dimension, `B` and `C` by group, and `dt`
+by head, keeping all four consistent with how `ssm_out` and the SSM state caches
+are split. The Qwen3Next branch in `get_split_segments` is a direct template for
+this.
+
+**Estimate: days, not weeks, and confined to one file** (`src/llama-model.cpp`),
+with `test-backend-ops` plus generated-token checks as the gate. That is far
+cheaper than the "implement split buffers for the CUDA/HIP backend" framing in
+the previous revision, which was based on the wrong mechanism.
+
+### What it would be worth
+
+Measured on this box, vLLM with `--tensor-parallel-size 2` keeps both cards at
+99.4%/99.6% simultaneously; llama.cpp's layer split reaches 85.6% aggregate at
+16k and 62% at 4k. Closing that would be worth roughly **1.16x at 16k and more
+at short context**, where the pipeline bubble is worst — which is exactly where
+latency matters most.
+
+It would also benefit every multi-GPU ROCm *and* CUDA user running a hybrid
+model, not just this box, since the exclusion list is backend-agnostic.
+
+---
+
 ## Combined result (change sets 4–9)
 
 `llama-bench`, 2× MI210, Nemotron-3-Super-120B-A12B `i1-Q4_K_M`,
