@@ -1073,11 +1073,25 @@ produced 158 failures. It is also what upstream's stream-k decomposition exists
 to solve; change set 5 disabled stream-k on CDNA for +33.7%, removing the
 load-balancing along with whatever was hurting.
 
-**Measure before building.** Empty blocks retire after a shared-memory load and
-a `__syncthreads()` — cheap individually, roughly 262M of them per 16k prefill.
-Whether that is meaningful time is a measurement, not a derivation. Three
-predictions in this project were wrong today by reading a profile share as if it
-were traffic; this one should not be the fourth.
+**Measured — and it does not pay.** Two experiments settled it.
+
+First, a deliberately **incorrect** build (grid forced small, 158 MUL_MAT_ID
+failures) ran **pp2048 +23.1%, pp16384 +23.5%**. That looked like a ceiling on
+the empty-block waste. It was not: that build also skips real work for any
+expert holding more than `2*J` tokens, so it bounds "skip the work entirely",
+which was never on offer.
+
+Second, the discriminator — [`tools/rejected/patch_mmq_mmid_early_out.py`](tools/rejected/patch_mmq_mmid_early_out.py),
+four lines letting an empty block return *before* its `ids_dst_shared` load and
+`__syncthreads()`, roughly 10x cheaper per block, same block count. Correct
+(0 failures) and **completely flat: −0.2% / −0.3%**, inside the error bars.
+
+If empty blocks cost 23%, that would have moved. It moved nothing. **Empty
+blocks are already nearly free, and the grid-stride restructure would not pay.**
+Four lines answered a question that would otherwise have cost a kernel rewrite.
+
+The reusable lesson: an upper-bound probe that also removes real work bounds
+nothing useful unless you know how much real work it removed.
 
 ### Superseded rationale for Option 1
 
