@@ -25,9 +25,19 @@ well be slower on gfx90a, exactly as the earlier CDNA2 rocBLAS carve-out patch
 turned out 6.5% slower than the assumption behind it. A/B against the same
 binary, and read generated tokens both ways.
 
-Scoped to the K-quants (Q2_K..Q6_K) because that is what an i1-Q4_K_M model
-actually dispatches; leaving the other types alone keeps the experiment narrow
-and the result attributable.
+SCOPE. Initially this covered only the K-quants, on the assumption that an
+i1-Q4_K_M model dispatches nothing else. The profile disproved that: the three
+hottest MMQ kernels were
+
+    mul_mat_q<(ggml_type)12, 64, false>   23.5%   Q4_K
+    mul_mat_q<(ggml_type)6,  64, false>   14.8%   Q5_0
+    mul_mat_q<(ggml_type)8,  64, false>   12.6%   Q8_0
+
+so Q5_0 and Q8_0 -- 27.4% of all prefill GPU time -- were still on stream-k.
+The hypothesis is about the workload shape (MoE, many tiles per expert), not
+about any property of a particular quant, so this now covers every quantised
+type in the table. GGML_TYPE_COUNT is the unreachable sentinel and is already
+false, so it simply does not match.
 
     python patch_mmq_cdna_no_streamk.py [--check] [--revert]
 """
@@ -35,15 +45,14 @@ import re
 import sys
 
 TARGET = "ggml/src/ggml-cuda/mmq-config-cdna.cuh"
-TYPES = ("Q2_K", "Q3_K", "Q4_K", "Q5_K", "Q6_K")
 MARKER = "MI210_NO_STREAMK"
 
 # CASE(type, nthreads, occupancy, I, J, sram_layout, K_vram, stream_k, fallback)
-# Rewrite only the 8th argument, and only on lines for the listed types. Anchor
-# on the two trailing args so a config whose shape changes upstream fails to
-# match instead of silently corrupting a different field.
+# Rewrite only the 8th argument. Anchor on the two trailing args so a config
+# whose shape changes upstream fails to match instead of silently corrupting a
+# different field.
 LINE_RE = re.compile(
-    r"^(\s*CASE\(GGML_TYPE_(?:" + "|".join(TYPES) + r"),[^;]*?,\s*)true(\s*,\s*(?:true|false)\s*\);)$"
+    r"^(\s*CASE\(GGML_TYPE_[A-Z0-9_]+,[^;]*?,\s*)true(\s*,\s*(?:true|false)\s*\);)$"
 )
 
 
