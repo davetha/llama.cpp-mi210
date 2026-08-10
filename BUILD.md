@@ -36,7 +36,8 @@ git apply 03-turboquant-wave64-fixes.patch
 ```
 
 > If you prefer drop-in replacement, the final state of every changed file is in
-> [`modified-files/`](modified-files/) — copy them over the tree directly.
+> [`tools/materialize_tree.sh --lineage turboquant`](tools/materialize_tree.sh) —
+> clones this base commit and applies 01-03 for you.
 
 ## 2. CMake configure
 
