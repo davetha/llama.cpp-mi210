@@ -6,8 +6,8 @@ This repo does **not** contain the full llama.cpp tree (too large to mirror here
 
 ```
 patches/          — apply these on top of the upstream fork
-modified-files/   — drop-ins DERIVED from patches/; split by base tree,
-                    see modified-files/README.md. Patches are canonical.
+tools/materialize_tree.sh — build a patched tree from patches/ on demand
+                    (nothing derived is stored here; patches are the only copy)
 tools/            — patch/revert scripts and the rocprofv3 trace analyser
 tools/rejected/   — patches that were tried and lost, kept with their verdicts
 Dockerfile        — reproducible gfx90a build of change sets 4-11
@@ -1295,7 +1295,7 @@ cmake --build build --target llama-bench llama-server test-backend-ops -j
 `patches/04-*` bundles the upstream SSD kernels together with the CDNA
 enablement, so it applies to a bare `67b9b0e` checkout with no cherry-pick
 first — verified with `git apply --check`, and the resulting files are
-byte-identical to the `modified-files/` copies. If you would rather keep the
+byte-identical to what `tools/materialize_tree.sh` produces. If you would rather keep the
 upstream work as its own commit, `git cherry-pick b62b350` instead and then
 apply only the guard changes via `tools/patch_ssm_ssd_cdna.py`.
 
@@ -1310,7 +1310,10 @@ Verify before trusting the build:
 revert the same changes against a clean tree, with `--check` / `--revert`, and
 refuse to apply if their anchors have moved upstream.
 
-The [`modified-files/`](modified-files/) directory contains the final state of every changed file if you prefer drop-in replacement over `git apply`.
+If you would rather have whole files than diffs, run
+[`tools/materialize_tree.sh`](tools/materialize_tree.sh) — it clones the right
+base commit and applies the patches, for either lineage. Nothing derived is
+checked in, so there is no second copy to drift.
 
 ---
 
