@@ -151,7 +151,7 @@ next experiment, at one rebuild per value.
 
 ---
 
-### 5. Disable stream-k for K-quants on CDNA  → [`patches/05-mmq-cdna-no-streamk.patch`](patches/05-mmq-cdna-no-streamk.patch)
+### 5. Disable stream-k for K-quants on CDNA  → folded into [`patches/06-mmq-cdna-tile-retune.patch`](patches/06-mmq-cdna-tile-retune.patch)
 
 **+3.7% prompt processing** on MoE models.
 
@@ -277,7 +277,7 @@ reproducibly. **Valid `I` values are 32, 64 and 128.**
 
 ---
 
-### 7. SSD chunk size 256 → 128 for CDNA  → [`patches/07-ssd-chunk-size-cdna.patch`](patches/07-ssd-chunk-size-cdna.patch)
+### 7. SSD chunk size 256 → 128 for CDNA  → folded into [`patches/04-ssd-mamba2-prefill-cdna.patch`](patches/04-ssd-mamba2-prefill-cdna.patch)
 
 **+2.5% prompt processing.**
 
@@ -1337,17 +1337,24 @@ fork at:
 c26cbdffcf6fc9b7430cd6b117757e9a3f70b7ea  Merge pull request #225 from TheTom/fix-ui-assets-partial-dist
 ```
 
-Change sets **4-10** are generated against **upstream `ggml-org/llama.cpp`** at:
+Change sets **4-13** are generated against **upstream `ggml-org/llama.cpp`** at:
 
 ```
-67b9b0e7f6ce45d929a4411907d3c48ec719e81c  llama-arch: fix DeepSeek4 APE tensor op (#25945)
+030ebb558  Address review comment of PR 25532 (#26852)   (2026-08-10)
 ```
 
-These are different bases. Change sets 4-10 were developed and measured on the
-upstream tree, **not** on the TurboQuant fork, and have not been tested there —
-`ssm-scan.cu` in particular changed substantially upstream in the interim, so
-expect `patches/04-*` to need rebasing before it applies to the fork. The two
-groups touch disjoint files, so there is no conflict between them in principle.
+These are different bases. Change sets 4-13 were developed and measured on the
+upstream tree, **not** on the TurboQuant fork, and have not been tested there.
+The two groups touch disjoint files, so there is no conflict between them in
+principle.
+
+**Re-cut 2026-08-10.** Upstream moved the CDNA MMQ configuration table out of
+`mmq.cuh` into its own `ggml/src/ggml-cuda/mmq-config-cdna.cuh`, which broke the
+old patch boundaries. Change sets 5 and 7 no longer exist as separate patches:
+5 (stream-k) is folded into `patches/06-*` because it edits the same table, and
+7 (SSD chunk size) is folded into `patches/04-*` because it edits the same file.
+Their write-ups below are kept for the reasoning and measurements; only the
+patch files were consolidated.
 
 ## How to apply
 
@@ -1369,8 +1376,8 @@ The [`Dockerfile`](Dockerfile) does exactly this; by hand it is:
 ```bash
 git clone https://github.com/ggml-org/llama.cpp.git
 cd llama.cpp
-git checkout 67b9b0e7f6ce45d929a4411907d3c48ec719e81c
-for p in 04 05 06 07 08 09 10 11 12 13; do git apply --3way ../patches/$p-*.patch; done
+git checkout 030ebb558
+for p in 04 06 08 09 10 11 12 13; do git apply --3way ../patches/$p-*.patch; done
 cmake -B build -DGGML_HIP=ON -DAMDGPU_TARGETS=gfx90a -DGGML_HIP_MMQ_MFMA=ON \
       -DCMAKE_BUILD_TYPE=Release
 cmake --build build --target llama-bench llama-server test-backend-ops -j
@@ -1378,16 +1385,13 @@ cmake --build build --target llama-bench llama-server test-backend-ops -j
 
 Change set 13 pins an **unmerged** upstream PR (#26001 at `1e1885f3d`) and
 bundles it, so it needs no cherry-pick — but it will need re-cutting if that PR
-moves. Verified: the whole sequence applies clean to a bare `67b9b0e`, builds,
-and passes `GATED_DELTA_NET 50/51`, `SSM_SCAN 7/7`, `SSM_CONV 45/45`,
-`MUL_MAT 1134/1134`, `MUL_MAT_ID 790/790` on gfx90a.
+moves. Verified on 2026-08-10: the whole sequence applies clean to a bare
+`030ebb558`, builds, and passes `GATED_DELTA_NET 50/51`, `SSM_SCAN 7/7`,
+`MUL_MAT 1186/1186`, `MUL_MAT_ID 865/865` on gfx90a.
 
-`patches/04-*` bundles the upstream SSD kernels together with the CDNA
-enablement, so it applies to a bare `67b9b0e` checkout with no cherry-pick
-first — verified with `git apply --check`, and the resulting files are
-byte-identical to what `tools/materialize_tree.sh` produces. If you would rather keep the
-upstream work as its own commit, `git cherry-pick b62b350` instead and then
-apply only the guard changes via `tools/patch_ssm_ssd_cdna.py`.
+`patches/04-*` is now a plain diff against the pinned base (the upstream SSD
+kernels are in-tree at `030ebb558`, so nothing needs bundling) and also carries
+the chunk-size tunable formerly shipped as patch 07.
 
 Verify before trusting the build:
 

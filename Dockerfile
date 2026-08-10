@@ -13,7 +13,7 @@ ARG ROCM_TAG=7.1.4-complete
 FROM rocm/dev-ubuntu-24.04:${ROCM_TAG}
 
 # Base commit these patches are cut against.
-ARG LLAMA_REF=67b9b0e
+ARG LLAMA_REF=030ebb558
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       git cmake ninja-build build-essential python3 libcurl4-openssl-dev ca-certificates \
