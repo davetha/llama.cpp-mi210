@@ -1421,3 +1421,133 @@ clean on 1 device at any concurrency; clean with `--no-kv-offload`; clean under
 RPC; unaffected by P2P, SDMA, kernel/copy serialisation, IOMMU mode, BAR size,
 pinned memory and mmap. Reproduces in under a minute with four concurrent
 completions against `llama-server -np 4` on a Mamba-2 hybrid.
+
+---
+
+## Running it: the flags that actually matter
+
+Measured on 2× MI210, Nemotron-3-Super-120B-A12B, this fork's `ssd-cdna2`.
+
+### Single user
+
+```bash
+LD_LIBRARY_PATH=/opt/rocm/lib:/opt/rocm/core-7.14/lib \
+llama-server \
+  -m nemotron-120b-iq4nl-downexps.gguf \
+  -ngl 99 -sm layer -np 1 \
+  -c 32768 -b 4096 -ub 2048 -fa on \
+  -ctk q8_0 -ctv q8_0 -t 24 \
+  --host 0.0.0.0 --port 8080
+```
+
+**pp2048 1844 · pp16384 2755 · tg128 55.0**
+
+Two of those carry more weight than they look:
+
+- **`LD_LIBRARY_PATH`** selects AMD's rocBLAS over Ubuntu's. Worth **+2.7%**, and
+  omitting it fails silently — nothing errors, it just links the slower library.
+- **`-np 1`** is not a tuning choice. Anything higher faults the moment two
+  requests overlap; see the 2-card concurrency fault section.
+
+`-ub 2048` is a **ceiling**, not a fixed size — change set 10 shrinks it
+adaptively for short prompts, which is where the +12.4% on 2k-token requests
+comes from. Raising it loses: `-ub 4096` measured 7% slower.
+
+### Multiple users
+
+The in-process path cannot serve concurrent requests on 2 cards. Use RPC, one
+process per card:
+
+```bash
+# one backend per card
+ggml-rpc-server -H 0.0.0.0 -p 50052   # HIP_VISIBLE_DEVICES=0
+ggml-rpc-server -H 0.0.0.0 -p 50053   # HIP_VISIBLE_DEVICES=1
+
+llama-server -m <model> --rpc 127.0.0.1:50052,127.0.0.1:50053 -ngl 999 \
+  -np 4 -c 8192 -fa on -ctk q8_0 -ctv q8_0 -b 4096 -ub 2048
+```
+
+**73.13 t/s aggregate at 4 concurrent**, against a 54 t/s in-process ceiling that
+cannot take concurrency at all. RPC costs ~18% single-stream and repays it the
+moment there is more than one user.
+
+`--rpc` needs `GGML_RPC=ON`, which the [`Dockerfile`](Dockerfile) sets.
+
+### Which GGUF
+
+Prefer a build where `ffn_down_exps` is **IQ4_NL**, not the stock `Q4_K_M`.
+`2688 % 256 != 0` makes `llama-quantize` silently downgrade those 40 tensors to
+Q8_0/Q5_0 — 46.8% of the weights at 8.5 and 5.5 bpw inside a file labelled
+Q4_K_M. Forcing IQ4_NL:
+
+```bash
+llama-quantize --allow-requantize --tensor-type ffn_down_exps=iq4_nl \
+  in.gguf out.gguf Q4_K_M
+```
+
+| | PPL | size | pp2048 | tg128 |
+|---|---|---:|---:|---:|
+| stock Q4_K_M | 3.5272 ± 0.045 | 80.1 GiB | 1794 | 53.6 |
+| **IQ4_NL** | **3.5192 ± 0.044** | **63.7 GiB** | **1844** | **55.0** |
+
+Better on every axis, and the perplexity difference sits inside the error bars.
+Measured on a 242 KB corpus rather than wikitext-2 — the A/B is fair, the corpus
+is narrow.
+
+### Do not
+
+| flag | why |
+|---|---|
+| `-np 2` or higher, in-process on 2 cards | faults under concurrency |
+| `-ub 4096` | 7% slower than 2048 |
+| `--no-kv-offload` | 4.4× slower — a diagnostic, not a config |
+| omitting `LD_LIBRARY_PATH` | silently −2.7% |
+| `-sm row` | unsupported on ROCm |
+
+---
+
+## Parked: the SSM_SCAN 2-D reshape (`ssm-scan-2d`)
+
+Implemented, **incorrect**, and **not worth finishing for this machine.**
+
+The reshape gives `ggml_ssm_scan` an output whose head axis survives, which is
+what `-sm tensor` needs — see the tensor-parallelism section. It does **not**
+make prefill faster on its own; prefill is already at 2755 without it. Its only
+value is unlocking TP's further ~1.16×.
+
+Against that:
+
+| | decode cost |
+|---|---|
+| the layout change | 55.0 → 22.7 t/s (**2.4×**) |
+| TP itself, independently | a further **−30%** (82.0 → 57.6, measured on Qwen3-Next) |
+
+Both are structural, not bugs. `d_state` was the contiguous axis the wave's
+lanes walk (`s0_warp[WARP_SIZE*j + lane]`); making it the slowest axis strides
+every access. That is what the transpose *means*.
+
+### Where it stands if resumed
+
+- `test-backend-ops` reports **0 failures** on SSM_SCAN / SSM_CONV / MUL_MAT_ID,
+  and generation is still degenerate against a control. The harness compares
+  CUDA to CPU and both were changed, so it cannot see a symmetric error.
+- The **SSD path is exonerated**: `SSM_SSD_MIN_TOKENS` is 128 and the failing
+  test used a ~20-token prompt, so `ssm_ssd_scale_state_kernel` and both cuBLAS
+  rewrites never executed.
+- Prime suspect is the **recurrent cache round trip**, which `test-backend-ops`
+  structurally never exercises — it calls the op once and never feeds the
+  returned state back as the next call's `s0`.
+- First step on resuming: **add a round-trip case to `test-backend-ops`.** Worth
+  doing regardless of this patch; that gap is why a green suite coexists with
+  broken inference.
+
+### What would make it worth reviving
+
+Rewrite `ssm_scan_f32_group` so lanes walk **`head_dim` instead of `d_state`** —
+the contiguous axis under the new layout. On gfx90a that is an exact fit:
+`head_dim = 64` equals the wavefront, where `d_state = 128` currently needs two
+elements per lane. That removes the layout's decode cost and might beat today's
+kernel outright. It does not remove TP's own 30%.
+
+Resume this if the goal is upstreaming TP for Mamba-2 hybrids, where that
+tradeoff is someone else's to make. Not for making this box faster.
