@@ -1404,6 +1404,11 @@ Note the RPC figures came from a separate RPC-enabled image without this fork's
 prefill patches, so only the decode numbers are comparable. Rebuilding that
 image on top of `ssd-cdna2` with `GGML_RPC=ON` would give both.
 
+### Reproducing it
+
+- [`tools/repro_2card_concurrency_fault.sh`](tools/repro_2card_concurrency_fault.sh) — one request, then N concurrent. Faults in under a minute at `-np 4` on 2 cards.
+- [`tools/repro_2card_sequential_control.sh`](tools/repro_2card_sequential_control.sh) — the control: three strictly sequential requests at a given `-np`. Clean at `-np 1` and `-np 2`, which is what rules out "the second request".
+
 ### Upstream-ready summary
 
 Faults with `n_seqs > 1` on 2 devices under `-sm layer`; clean at `n_seqs == 1`;
