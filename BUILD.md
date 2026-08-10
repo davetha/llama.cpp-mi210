@@ -1,5 +1,18 @@
 # Building for gfx90a (AMD MI210)
 
+> **Scope note.** This page documents the **turboquant lineage** — change sets
+> 1–3 (`patches/01-*` .. `03-*`), which are cut against
+> `llama-cpp-turboquant`, not upstream llama.cpp.
+>
+> For the **CDNA2 prefill work** (change sets 4–11, the SSD/MMQ/rocBLAS
+> material that the README is mostly about) use the
+> [`Dockerfile`](Dockerfile) in the repo root. It pins upstream
+> `ggml-org/llama.cpp` at `67b9b0e`, applies patches 04–11, and builds with the
+> flags those change sets assume — including `GGML_HIP_MMQ_MFMA=ON`, which the
+> retuned tiles in change set 6 depend on, and the `LD_LIBRARY_PATH` that picks
+> AMD's rocBLAS over Ubuntu's.
+
+
 Build inside a **ROCm 7.14** Docker container. The host kernel is untouched;
 all GPU work happens in containers with `/dev/kfd` and `/dev/dri` passed through.
 

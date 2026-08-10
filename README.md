@@ -9,7 +9,8 @@ patches/          — apply these on top of the upstream fork
 modified-files/   — the exact modified files (drop-in replacements)
 tools/            — patch/revert scripts and the rocprofv3 trace analyser
 tools/rejected/   — patches that were tried and lost, kept with their verdicts
-BUILD.md          — how to build for gfx90a in Docker
+Dockerfile        — reproducible gfx90a build of change sets 4-11
+BUILD.md          — the turboquant lineage (change sets 1-3)
 ```
 
 ---
