@@ -16,6 +16,7 @@ tools/materialize_tree.sh — build a patched tree from patches/ on demand
 tools/            — patch/revert scripts and the rocprofv3 trace analyser
 tools/rejected/   — patches that were tried and lost, kept with their verdicts
 Dockerfile        — reproducible gfx90a build of change sets 4-12
+                    (13 is excluded: it patches an unmerged upstream PR)
 BUILD.md          — the turboquant lineage (change sets 1-3)
 ```
 
@@ -560,6 +561,64 @@ the restore, releasing it only after the deferred copies in
 Same-binary A/B, toggled by the env var only: unpinned faults after **2**
 restores; pinned ran **140 restores over 12 rounds with zero faults**, temp-0
 output unchanged, decode unchanged (54.3 t/s).
+
+---
+
+### 13. Make the chunked gated-delta-net kernel work on CDNA  → [`patches/13-gdn-chunked-cdna.patch`](patches/13-gdn-chunked-cdna.patch)
+
+> **Applies on top of [upstream PR #26001](https://github.com/ggml-org/llama.cpp/pull/26001), not on the pinned base.**
+> That PR is unmerged, so this change set is **not** applied by the
+> [`Dockerfile`](Dockerfile). See "How to apply" below.
+
+Worth **+12% prefill** on hybrid gated-delta-net models (Qwen3.5/3.6 family —
+`qwen35`, `qwen35moe`). Upstream's `gated_delta_net.cu` runs a token-serial
+scan with no matrix cores at all; PR #26001 adds a chunked kernel that
+expresses the same recurrence as batched GEMMs. Its author wrote a
+`ggml_cuda_mma` path covering `AMD_MFMA_AVAILABLE` but disabled it at runtime
+having no AMD hardware to validate on. It turned out to need four fixes:
+
+| # | defect | symptom |
+|---|---|---|
+| 1 | stage 2 launched a **32-thread block**; AMD MFMA tiles span 64 lanes (`mma.cuh`: `ne = I*J/64`) | half the accumulator never populated |
+| 2 | `__launch_bounds__(32, 8)` is a hard ceiling | 64-thread launch failed outright |
+| 3 | plain `load_ldmatrix` has **no AMD_MFMA branch** (Turing + AMD_WMMA only, then `NO_DEVICE_CODE`) | trap at runtime |
+| 4 | accumulator declared `DATA_LAYOUT_I_MAJOR`; on CDNA the 16×16 f32 fragment is **`J_MAJOR`** | `get_i`/`get_j` transposed → whole tile scattered |
+
+Number 4 was the real one, and it is the sort of bug that only shows up on
+hardware: `mma.cuh`'s J_MAJOR tile is a wrapper that *swaps* `get_i`/`get_j`,
+so declaring the wrong layout silently transposes every writeback. Symptom was
+`ERR = 1.868` against a `2e-7` threshold — output uncorrelated with the
+reference rather than merely imprecise. The fix is the same arch switch that
+closed PR #24561 used, which is what pointed at it.
+
+Ruled out along the way: `mma(tile<16,16,float>, tile<16,8,half2>,
+tile<16,8,half2>)` **does** have an AMD_MFMA branch
+(`__builtin_amdgcn_mfma_f32_16x16x16f16`) — the matrix op was never at fault.
+
+Measured on 2× MI210, Qwen3.6-40B IQ4_NL, same binary toggled only by
+`GGML_CUDA_DISABLE_GDN_CHUNK`:
+
+| test | chunked off | chunked on | gain |
+|---|---:|---:|---:|
+| pp2048 | 606.48 ± 8.08 | **677.99 ± 0.16** | **+11.8%** |
+| pp8192 | 910.75 ± 1.69 | **1021.18 ± 0.97** | **+12.1%** |
+
+`test-backend-ops -o GATED_DELTA_NET` gives **50/51 on both devices** (from
+36/51 broken), and temp-0 output on a 376-token prompt is **byte-identical**
+to the recurrent path. The one failure is `n_seq_tokens=2048` at NMSE ~3e-7
+against a 2e-7 threshold — a precision margin at the most-accumulated shape
+(128 chunks at `CS=16`), not a correctness failure. Disclosed as such
+upstream rather than quietly relaxing the bound.
+
+Context on the ceiling: the recurrent GDN op measures ~1.31 TFLOPS here while
+the same box does 75–80 TFLOPS on this model's own GEMMs, and the op accounts
+for ~19% of prefill wall clock. That caps *any* chunked implementation at
+~1.24× end-to-end, so +12% is roughly half the available headroom.
+
+**Does not help MTP configs.** The chunked path gates on `K == 1`, and
+speculative decoding sets `K > 1`, so `--spec-type draft-mtp` falls back to
+the recurrent kernel. On this hardware MTP is worth +23% decode against this
+change set's +12% prefill — with a working prompt cache, MTP usually wins.
 
 ---
 
@@ -1301,23 +1360,33 @@ git apply 03-turboquant-wave64-fixes.patch
 # build for gfx90a (see BUILD.md)
 ```
 
-Change sets 4-10 target upstream llama.cpp instead (see "Base commit" above):
+Change sets 4-12 target upstream llama.cpp instead (see "Base commit" above).
+The [`Dockerfile`](Dockerfile) does exactly this; by hand it is:
 
 ```bash
 git clone https://github.com/ggml-org/llama.cpp.git
 cd llama.cpp
 git checkout 67b9b0e7f6ce45d929a4411907d3c48ec719e81c
-git apply patches/04-ssd-mamba2-prefill-cdna.patch
-git apply patches/05-mmq-cdna-no-streamk.patch
-git apply patches/06-mmq-cdna-tile-retune.patch
-git apply patches/07-ssd-chunk-size-cdna.patch
-git apply patches/08-mmid-generalize-neu-padded.patch
-git apply patches/09-mamba-conv-concat-cont.patch
-git apply patches/10-adaptive-ubatch.patch
+for p in 04 05 06 07 08 09 10 11 12; do git apply ../patches/$p-*.patch; done
 cmake -B build -DGGML_HIP=ON -DAMDGPU_TARGETS=gfx90a -DGGML_HIP_MMQ_MFMA=ON \
       -DCMAKE_BUILD_TYPE=Release
 cmake --build build --target llama-bench llama-server test-backend-ops -j
 ```
+
+**Change set 13 is different — it patches an unmerged upstream PR**, so it is
+deliberately left out of the `Dockerfile` and out of the loop above. It only
+applies on top of [PR #26001](https://github.com/ggml-org/llama.cpp/pull/26001):
+
+```bash
+git fetch origin pull/26001/head:pr26001
+git checkout pr26001            # validated at 1e1885f3d
+git apply ../patches/13-gdn-chunked-cdna.patch
+```
+
+Note that branch does **not** carry change sets 4-12, so this is a separate
+build for gated-delta-net work rather than something you stack onto the main
+one. If PR #26001 merges upstream, patch 13 should be re-cut against master
+(or dropped entirely, if the fixes land with it).
 
 `patches/04-*` bundles the upstream SSD kernels together with the CDNA
 enablement, so it applies to a bare `67b9b0e` checkout with no cherry-pick
