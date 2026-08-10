@@ -24,16 +24,17 @@ RUN git clone https://github.com/ggml-org/llama.cpp . \
     && git checkout ${LLAMA_REF}
 
 COPY patches/ /patches/
-# 04-11 only: 01-03 belong to the turboquant lineage and do not apply here.
+# 04-12 only: 01-03 belong to the turboquant lineage and do not apply here.
 RUN set -eux; \
-    for p in /patches/0[4-9]-*.patch /patches/1[01]-*.patch; do \
+    for p in /patches/0[4-9]-*.patch /patches/1[0-2]-*.patch; do \
       echo "applying $(basename "$p")"; git apply --3way "$p"; \
     done
 
 # GPU_TARGETS=gfx90a only -- MI210 is CDNA2. HIP_MMQ_MFMA is what the retuned
 # MMQ tiles in change set 6 depend on. RPC is ON so a two-process-per-card setup
-# can be built from this same image; the in-process path faults under
-# concurrency on 2 cards (see the README's 2-card concurrency fault section).
+# can also be built from this image, though it is no longer needed for
+# stability: change set 12 + GGML_CUDA_REGISTER_HOST=1 makes the in-process
+# 2-card path safe (see USAGE.md and the README's fault section).
 RUN cmake -B build \
       -G Ninja \
       -DGPU_TARGETS=gfx90a \

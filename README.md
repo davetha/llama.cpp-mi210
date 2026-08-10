@@ -2,15 +2,20 @@
 
 > **Fork of [`TheTom/llama-cpp-turboquant`](https://github.com/TheTom/llama-cpp-turboquant)** (itself a fork of [llama.cpp](https://github.com/ggml-org/llama.cpp)) with three change sets optimized for **AMD MI210 (gfx90a / CDNA2)** inference.
 
+**Just want to run it? → [USAGE.md](USAGE.md)** — build, requantize, serve,
+integrate (litellm / open-webui / opencode), troubleshoot. This README is the
+engineering narrative behind it.
+
 This repo does **not** contain the full llama.cpp tree (too large to mirror here). Instead it ships:
 
 ```
+USAGE.md          — how to build and serve (start here)
 patches/          — apply these on top of the upstream fork
 tools/materialize_tree.sh — build a patched tree from patches/ on demand
                     (nothing derived is stored here; patches are the only copy)
 tools/            — patch/revert scripts and the rocprofv3 trace analyser
 tools/rejected/   — patches that were tried and lost, kept with their verdicts
-Dockerfile        — reproducible gfx90a build of change sets 4-11
+Dockerfile        — reproducible gfx90a build of change sets 4-12
 BUILD.md          — the turboquant lineage (change sets 1-3)
 ```
 
