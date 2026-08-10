@@ -6,7 +6,8 @@ This repo does **not** contain the full llama.cpp tree (too large to mirror here
 
 ```
 patches/          — apply these on top of the upstream fork
-modified-files/   — the exact modified files (drop-in replacements)
+modified-files/   — drop-ins DERIVED from patches/; split by base tree,
+                    see modified-files/README.md. Patches are canonical.
 tools/            — patch/revert scripts and the rocprofv3 trace analyser
 tools/rejected/   — patches that were tried and lost, kept with their verdicts
 Dockerfile        — reproducible gfx90a build of change sets 4-11
