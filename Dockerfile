@@ -24,9 +24,13 @@ RUN git clone https://github.com/ggml-org/llama.cpp . \
     && git checkout ${LLAMA_REF}
 
 COPY patches/ /patches/
-# 04-12 only: 01-03 belong to the turboquant lineage and do not apply here.
+# 04-13 only: 01-03 belong to the turboquant lineage and do not apply here.
+# Note 13 is self-contained -- it bundles upstream PR #26001 (unmerged, pinned
+# at 1e1885f3d) with the CDNA fixes that make it run, so it applies to a bare
+# ${LLAMA_REF} checkout like 04 does. If that PR merges or is force-pushed
+# upstream, 13 must be re-cut; see the README.
 RUN set -eux; \
-    for p in /patches/0[4-9]-*.patch /patches/1[0-2]-*.patch; do \
+    for p in /patches/0[4-9]-*.patch /patches/1[0-3]-*.patch; do \
       echo "applying $(basename "$p")"; git apply --3way "$p"; \
     done
 

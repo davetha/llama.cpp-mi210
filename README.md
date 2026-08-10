@@ -15,8 +15,7 @@ tools/materialize_tree.sh — build a patched tree from patches/ on demand
                     (nothing derived is stored here; patches are the only copy)
 tools/            — patch/revert scripts and the rocprofv3 trace analyser
 tools/rejected/   — patches that were tried and lost, kept with their verdicts
-Dockerfile        — reproducible gfx90a build of change sets 4-12
-                    (13 is excluded: it patches an unmerged upstream PR)
+Dockerfile        — reproducible gfx90a build of change sets 4-13
 BUILD.md          — the turboquant lineage (change sets 1-3)
 ```
 
@@ -566,9 +565,13 @@ output unchanged, decode unchanged (54.3 t/s).
 
 ### 13. Make the chunked gated-delta-net kernel work on CDNA  → [`patches/13-gdn-chunked-cdna.patch`](patches/13-gdn-chunked-cdna.patch)
 
-> **Applies on top of [upstream PR #26001](https://github.com/ggml-org/llama.cpp/pull/26001), not on the pinned base.**
-> That PR is unmerged, so this change set is **not** applied by the
-> [`Dockerfile`](Dockerfile). See "How to apply" below.
+> **Self-contained but pinned to an unmerged PR.** This patch bundles
+> [upstream PR #26001](https://github.com/ggml-org/llama.cpp/pull/26001)
+> (pinned at `1e1885f3d`) together with the CDNA fixes that make it run, so it
+> applies to a bare base checkout and the [`Dockerfile`](Dockerfile) applies it
+> in the normal loop — same approach as change set 4. **If #26001 merges or is
+> force-pushed upstream, this patch must be re-cut** (or dropped, if the fixes
+> land with it).
 
 Worth **+12% prefill** on hybrid gated-delta-net models (Qwen3.5/3.6 family —
 `qwen35`, `qwen35moe`). Upstream's `gated_delta_net.cu` runs a token-serial
@@ -1360,33 +1363,24 @@ git apply 03-turboquant-wave64-fixes.patch
 # build for gfx90a (see BUILD.md)
 ```
 
-Change sets 4-12 target upstream llama.cpp instead (see "Base commit" above).
+Change sets 4-13 target upstream llama.cpp instead (see "Base commit" above).
 The [`Dockerfile`](Dockerfile) does exactly this; by hand it is:
 
 ```bash
 git clone https://github.com/ggml-org/llama.cpp.git
 cd llama.cpp
 git checkout 67b9b0e7f6ce45d929a4411907d3c48ec719e81c
-for p in 04 05 06 07 08 09 10 11 12; do git apply ../patches/$p-*.patch; done
+for p in 04 05 06 07 08 09 10 11 12 13; do git apply --3way ../patches/$p-*.patch; done
 cmake -B build -DGGML_HIP=ON -DAMDGPU_TARGETS=gfx90a -DGGML_HIP_MMQ_MFMA=ON \
       -DCMAKE_BUILD_TYPE=Release
 cmake --build build --target llama-bench llama-server test-backend-ops -j
 ```
 
-**Change set 13 is different — it patches an unmerged upstream PR**, so it is
-deliberately left out of the `Dockerfile` and out of the loop above. It only
-applies on top of [PR #26001](https://github.com/ggml-org/llama.cpp/pull/26001):
-
-```bash
-git fetch origin pull/26001/head:pr26001
-git checkout pr26001            # validated at 1e1885f3d
-git apply ../patches/13-gdn-chunked-cdna.patch
-```
-
-Note that branch does **not** carry change sets 4-12, so this is a separate
-build for gated-delta-net work rather than something you stack onto the main
-one. If PR #26001 merges upstream, patch 13 should be re-cut against master
-(or dropped entirely, if the fixes land with it).
+Change set 13 pins an **unmerged** upstream PR (#26001 at `1e1885f3d`) and
+bundles it, so it needs no cherry-pick — but it will need re-cutting if that PR
+moves. Verified: the whole sequence applies clean to a bare `67b9b0e`, builds,
+and passes `GATED_DELTA_NET 50/51`, `SSM_SCAN 7/7`, `SSM_CONV 45/45`,
+`MUL_MAT 1134/1134`, `MUL_MAT_ID 790/790` on gfx90a.
 
 `patches/04-*` bundles the upstream SSD kernels together with the CDNA
 enablement, so it applies to a bare `67b9b0e` checkout with no cherry-pick
