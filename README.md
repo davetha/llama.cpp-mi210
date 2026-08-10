@@ -536,6 +536,28 @@ its own.**
 
 ---
 
+### 12. Pin the host state buffer during sequence-state restore  → [`patches/12-pin-state-restore-rocm-multigpu.patch`](patches/12-pin-state-restore-rocm-multigpu.patch)
+
+The fix for the 2-card fault documented [below](#the-2-card-concurrency-fault-resolved).
+Root cause is a ROCm runtime defect
+([ROCm/rocm-systems#4817](https://github.com/ROCm/rocm-systems/issues/4817)):
+with two or more devices in one process, the runtime's on-the-fly mapping of
+*pageable* host memory for an async H2D copy can be torn down mid-transfer, and
+the SDMA engine faults inside the copy's source range. Buffer lifetime at the
+llama.cpp level is irrelevant — the upstream reporter reproduced it with the
+buffer intentionally leaked, and two lifetime fixes here failed the same way.
+
+The patch registers the state buffer as portable pinned memory
+(`hipHostRegister`) in `llama_context::state_seq_set_data` for the duration of
+the restore, releasing it only after the deferred copies in
+`~llama_io_read_host` flush. Gated on **`GGML_CUDA_REGISTER_HOST=1`**.
+
+Same-binary A/B, toggled by the env var only: unpinned faults after **2**
+restores; pinned ran **140 restores over 12 rounds with zero faults**, temp-0
+output unchanged, decode unchanged (54.3 t/s).
+
+---
+
 ## Tensor parallelism: it exists, and here is exactly what is missing
 
 An earlier revision of this document concluded that llama.cpp cannot do tensor
@@ -1328,7 +1350,23 @@ MIT. The underlying llama.cpp is MIT-licensed.
 
 ---
 
-## The 2-card concurrency fault: cornered, with a workaround
+## The 2-card concurrency fault: RESOLVED
+
+> **Resolution (2026-08-10).** This is a ROCm runtime defect, not a llama.cpp
+> bug: [ROCm/rocm-systems#4817](https://github.com/ROCm/rocm-systems/issues/4817)
+> (still open upstream; same bug as
+> [ggml-org/llama.cpp#20176](https://github.com/ggml-org/llama.cpp/issues/20176)
+> and [#26828](https://github.com/ggml-org/llama.cpp/issues/26828)). Async H2D
+> copies from **pageable** host memory can fault mid-transfer when a second
+> device is active in the process. The trigger is the **prompt-cache /
+> checkpoint state restore**, which is why it looked like a concurrency or
+> long-context bug — restores only happen under those conditions.
+> **Fix: change set 12** (pin the state buffer during restore) plus
+> `GGML_CUDA_REGISTER_HOST=1`. On stock builds, `--cache-ram 0` avoids it.
+> In-process 2-card serving with `-np 4` is safe with the fix; RPC is no longer
+> required. The investigation below is preserved as history — its mechanism
+> guesses ("not a race", "cross-device KV access") and its RPC recommendation
+> are **superseded**.
 
 Long-standing on this box and previously recorded only as *"pre-existing, second
 sequential `llama-server` request, not root-caused."* That description was wrong
@@ -1463,19 +1501,23 @@ Two of those carry more weight than they look:
 
 - **`LD_LIBRARY_PATH`** selects AMD's rocBLAS over Ubuntu's. Worth **+2.7%**, and
   omitting it fails silently — nothing errors, it just links the slower library.
-- **`-np 1` does NOT make this safe.** An earlier revision said it did. It
-  faults anyway once a conversation grows past ~128 tokens of context, with a
-  single slot and no concurrency. **Use the RPC configuration below for anything
-  real**; this in-process form is only sound for short, single-shot prompts.
+- **Add `GGML_CUDA_REGISTER_HOST=1`** (with change set 12 applied) or
+  `--cache-ram 0` on a stock build — otherwise the ROCm state-restore fault
+  above applies. With the fix, in-process 2-card serving is stable at `-np 4`;
+  earlier revisions of this section recommended RPC for that reason, which is
+  no longer necessary.
 
 `-ub 2048` is a **ceiling**, not a fixed size — change set 10 shrinks it
 adaptively for short prompts, which is where the +12.4% on 2k-token requests
 comes from. Raising it loses: `-ub 4096` measured 7% slower.
 
-### Recommended for all real use: RPC
+### Alternative: RPC (superseded by change set 12 for stability)
 
-The in-process path faults on 2 cards under concurrency **or** long context, so
-this is the configuration to actually run. One process per card:
+Before the state-restore fault was fixed, RPC was the only stable way to serve
+concurrently on 2 cards. It still works and still delivers the aggregate
+numbers below, but it costs ~55% of prefill (1219 vs 2773 pp16384) because the
+RPC image predates this fork's prefill patches — with the fix, in-process is
+the better configuration. One process per card:
 
 ```bash
 # one backend per card
@@ -1517,7 +1559,7 @@ is narrow.
 
 | flag | why |
 |---|---|
-| `-np 2` or higher, in-process on 2 cards | faults under concurrency |
+| prompt cache on 2 cards without change set 12 + `GGML_CUDA_REGISTER_HOST=1` | ROCm state-restore fault (use `--cache-ram 0` on stock builds) |
 | `-ub 4096` | 7% slower than 2048 |
 | `--no-kv-offload` | 4.4× slower — a diagnostic, not a config |
 | omitting `LD_LIBRARY_PATH` | silently −2.7% |

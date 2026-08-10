@@ -1,0 +1,71 @@
+From 4d34c82f1ce015b8cf335e152843ee9e2d4cc211 Mon Sep 17 00:00:00 2001
+From: davetha <davetha@users.noreply.github.com>
+Date: Mon, 10 Aug 2026 06:35:37 +0000
+Subject: [PATCH] HIP: pin host state buffer during sequence-state restore
+
+Works around ROCm/rocm-systems#4817: with two or more devices in one
+process, the runtime's on-the-fly mapping of pageable host memory for
+async H2D copies can be torn down mid-transfer, and the SDMA engine
+faults inside the copy's source range. Buffer lifetime at the llama.cpp
+level is irrelevant (reproduced upstream with the buffer leaked).
+
+Register the state buffer as portable pinned memory for the duration of
+the restore, released only after the deferred copies in
+~llama_io_read_host flush. Gated on GGML_CUDA_REGISTER_HOST=1.
+
+Verified same-binary A/B on 2x MI210 (gfx90a), ROCm 7.14: unpinned
+faults after 2 restores; pinned ran 140 restores over 12 rounds with no
+fault, temp-0 output unchanged.
+
+See ggml-org/llama.cpp#26828, ggml-org/llama.cpp#20176.
+---
+ src/llama-context.cpp | 33 +++++++++++++++++++++++++++++++++
+ 1 file changed, 33 insertions(+)
+
+diff --git a/src/llama-context.cpp b/src/llama-context.cpp
+index 75f354b..85de660 100644
+--- a/src/llama-context.cpp
++++ b/src/llama-context.cpp
+@@ -3002,6 +3002,39 @@ size_t llama_context::state_seq_get_data(llama_seq_id seq_id, uint8_t * dst, siz
+ }
+ 
+ size_t llama_context::state_seq_set_data(llama_seq_id seq_id, const uint8_t * src, size_t size, llama_state_seq_flags flags) {
++    // MI210_PIN_STATE: pin the host state buffer for the duration of the
++    // restore. With 2+ devices in one process, ROCm's on-the-fly mapping of
++    // pageable memory for async H2D copies can be torn down mid-transfer and
++    // the SDMA engine faults inside the copy's source range (ROCm/rocm-systems
++    // #4817). Registering the range as portable pinned memory keeps the
++    // mapping stable. Declared before `io` so unregistration runs only after
++    // the deferred copies in ~llama_io_read_host have flushed.
++    struct pin_guard_t {
++        void * ptr = nullptr;
++        void (* unreg)(void *) = nullptr;
++        ~pin_guard_t() { if (ptr && unreg) { unreg(ptr); } }
++    } pin_guard;
++    if (!(flags & LLAMA_STATE_SEQ_FLAGS_ON_DEVICE) && size >= 1u << 20) {
++        for (auto & backend : backends) {
++            ggml_backend_dev_t dev = ggml_backend_get_device(backend.get());
++            ggml_backend_reg_t reg = dev ? ggml_backend_dev_backend_reg(dev) : nullptr;
++            if (!reg) {
++                continue;
++            }
++            auto * reg_fn   = (bool (*)(void *, size_t)) ggml_backend_reg_get_proc_address(reg, "ggml_backend_register_host_buffer");
++            auto * unreg_fn = (void (*)(void *))         ggml_backend_reg_get_proc_address(reg, "ggml_backend_unregister_host_buffer");
++            if (reg_fn && unreg_fn) {
++                if (reg_fn(const_cast<uint8_t *>(src), size)) {
++                    pin_guard.ptr   = const_cast<uint8_t *>(src);
++                    pin_guard.unreg = unreg_fn;
++                    LLAMA_LOG_WARN("%s: pinned state buffer (%zu bytes) for restore\n", __func__, size);
++                } else {
++                    LLAMA_LOG_WARN("%s: could not pin state buffer (%zu bytes), restoring unpinned\n", __func__, size);
++                }
++                break;
++            }
++        }
++    }
+     std::unique_ptr<llama_io_read_i> io;
+     if (flags & LLAMA_STATE_SEQ_FLAGS_ON_DEVICE) {
+         // create a temporary io to read the magic and the src seq_id
+-- 
+2.53.0
+
