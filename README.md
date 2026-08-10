@@ -1351,9 +1351,26 @@ it varies only by ASLR between runs.
 | 2 cards, `-np 4`, **concurrent** | **fault** |
 | 1 card, `-np 4`, concurrent | **clean** |
 
-It is not the second request, and it is not slot allocation — `-np 2` run
-sequentially is completely fine. It needs **two devices *and* more than one
-sequence in flight at the same moment**. Remove either and it works.
+**CORRECTION.** An earlier revision of this section concluded the trigger was
+"two devices *and* more than one sequence in flight". **That was wrong**, and it
+was wrong because every test above used ~10-token prompts.
+
+Under real traffic it faults with **one slot, strictly sequentially**:
+
+```
+slot release: id 0 | task 361 | stop processing: n_tokens = 7083
+slot launch_slot_: id 0 | task 742 | processing task
+Memory access fault by GPU node-1 on address 0x7404ef200000
+```
+
+Same slot id, each task released before the next launched, no concurrency at
+all. The distinguishing factor is **context length** — 7083 tokens, far past
+`SSM_SSD_MIN_TOKENS = 128`, so the SSD prefill path runs. The short-prompt tests
+never crossed that threshold and so never exercised it on two devices.
+
+So the honest trigger is: **two devices in one process**, tripped by either
+concurrency *or* long context. Anything that only varied `-np` was measuring one
+face of it.
 
 That matters because llama.cpp's server does not run concurrent slots as
 parallel graphs; continuous batching merges them into a single forward pass. So
@@ -1428,7 +1445,7 @@ completions against `llama-server -np 4` on a Mamba-2 hybrid.
 
 Measured on 2× MI210, Nemotron-3-Super-120B-A12B, this fork's `ssd-cdna2`.
 
-### Single user
+### Single user (SHORT PROMPTS ONLY — see the warning below)
 
 ```bash
 LD_LIBRARY_PATH=/opt/rocm/lib:/opt/rocm/core-7.14/lib \
@@ -1446,17 +1463,19 @@ Two of those carry more weight than they look:
 
 - **`LD_LIBRARY_PATH`** selects AMD's rocBLAS over Ubuntu's. Worth **+2.7%**, and
   omitting it fails silently — nothing errors, it just links the slower library.
-- **`-np 1`** is not a tuning choice. Anything higher faults the moment two
-  requests overlap; see the 2-card concurrency fault section.
+- **`-np 1` does NOT make this safe.** An earlier revision said it did. It
+  faults anyway once a conversation grows past ~128 tokens of context, with a
+  single slot and no concurrency. **Use the RPC configuration below for anything
+  real**; this in-process form is only sound for short, single-shot prompts.
 
 `-ub 2048` is a **ceiling**, not a fixed size — change set 10 shrinks it
 adaptively for short prompts, which is where the +12.4% on 2k-token requests
 comes from. Raising it loses: `-ub 4096` measured 7% slower.
 
-### Multiple users
+### Recommended for all real use: RPC
 
-The in-process path cannot serve concurrent requests on 2 cards. Use RPC, one
-process per card:
+The in-process path faults on 2 cards under concurrency **or** long context, so
+this is the configuration to actually run. One process per card:
 
 ```bash
 # one backend per card
