@@ -1320,3 +1320,94 @@ The [`modified-files/`](modified-files/) directory contains the final state of e
 ## License
 
 MIT. The underlying llama.cpp is MIT-licensed.
+
+---
+
+## The 2-card concurrency fault: cornered, with a workaround
+
+Long-standing on this box and previously recorded only as *"pre-existing, second
+sequential `llama-server` request, not root-caused."* That description was wrong
+in two ways, and the real trigger is now precise.
+
+```
+Memory access fault by GPU node-1 (Agent handle: 0x...) on address 0x7c675f200000
+```
+
+The address is a **host** userspace VA (`0x7...`), not VRAM or a BAR window, and
+it varies only by ASLR between runs.
+
+### The trigger
+
+| configuration | result |
+|---|---|
+| 2 cards, `-np 1`, 3 sequential requests | **clean** — 54.6 / 54.0 / 54.3 t/s |
+| 2 cards, `-np 2`, 3 sequential requests | **clean** — 54.5 / 54.4 / 54.4 t/s |
+| 2 cards, `-np 2`, **concurrent** | **fault** |
+| 2 cards, `-np 4`, **concurrent** | **fault** |
+| 1 card, `-np 4`, concurrent | **clean** |
+
+It is not the second request, and it is not slot allocation — `-np 2` run
+sequentially is completely fine. It needs **two devices *and* more than one
+sequence in flight at the same moment**. Remove either and it works.
+
+That matters because llama.cpp's server does not run concurrent slots as
+parallel graphs; continuous batching merges them into a single forward pass. So
+"concurrent" here means one batch with `n_seqs > 1`, and this is a Mamba-2
+hybrid whose per-sequence recurrent state is indexed by `ids` out of a cache
+that `-sm layer` splits across both devices.
+
+### What does NOT fix it
+
+Every one of these produced the identical fault:
+
+| ruled out | how |
+|---|---|
+| peer-to-peer access | `GGML_CUDA_P2P=1` |
+| DMA engines | `HSA_ENABLE_SDMA=0` |
+| a dispatch race | `AMD_SERIALIZE_KERNEL=3` + `AMD_SERIALIZE_COPY=3` |
+| IOMMU mode | `amd_iommu=off` **and** `amd_iommu=on iommu=pt` (reboot) |
+| BAR aperture | already 64G on both cards; ReBAR was never the issue |
+| pinned host memory | `GGML_CUDA_NO_PINNED=1` |
+| mmap'd weight registration | `--no-mmap` |
+
+The serialisation result is the most informative: **it is not a race.** Seven
+hypotheses, all about *transport* — peer access, DMA, ordering, translation,
+pinning, mmap — and the problem was never transport.
+
+### What DOES fix it
+
+**`--no-kv-offload` eliminates it.** Zero faults at `-np 4` concurrent. That is
+the confirmation: moving the cache off the GPU removes the fault under exactly
+the load that otherwise kills it. The bug is **cross-device access of the
+KV/recurrent state cache when more than one sequence is in flight**.
+
+Do not run it as a configuration, though — every attention layer's KV then
+crosses PCIe per token:
+
+| configuration | single | 4 concurrent |
+|---|---:|---:|
+| in-process, KV on GPU | **54.08** | **fault** |
+| in-process, `--no-kv-offload` | 12.24 | 28.76 aggregate |
+| **RPC (one process per card)** | 44.58 | **73.13 aggregate** |
+
+### Recommendation
+
+**Use RPC for concurrent serving.** It costs ~18% single-stream but delivers
+**73.13 t/s aggregate — about 35% above the in-process ceiling**, because
+in-process cannot do concurrency at all. RPC is immune because each process owns
+whole layers and never addresses another device's cache slice, which is also
+independent evidence for the diagnosis.
+
+`-np 1` on two cards remains completely safe if concurrency is not needed.
+
+Note the RPC figures came from a separate RPC-enabled image without this fork's
+prefill patches, so only the decode numbers are comparable. Rebuilding that
+image on top of `ssd-cdna2` with `GGML_RPC=ON` would give both.
+
+### Upstream-ready summary
+
+Faults with `n_seqs > 1` on 2 devices under `-sm layer`; clean at `n_seqs == 1`;
+clean on 1 device at any concurrency; clean with `--no-kv-offload`; clean under
+RPC; unaffected by P2P, SDMA, kernel/copy serialisation, IOMMU mode, BAR size,
+pinned memory and mmap. Reproduces in under a minute with four concurrent
+completions against `llama-server -np 4` on a Mamba-2 hybrid.
