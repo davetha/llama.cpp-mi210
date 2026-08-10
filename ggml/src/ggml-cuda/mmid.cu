@@ -19,6 +19,15 @@ struct mm_ids_helper_store {
 };
 static_assert(sizeof(mm_ids_helper_store) == 4, "unexpected size for mm_ids_helper_store");
 
+// MI210_NEU_PADDED: smallest power of 2 >= n (n >= 1), evaluated at compile time.
+static constexpr int mm_ids_next_pow2(int n) {
+    int p = 1;
+    while (p < n) {
+        p *= 2;
+    }
+    return p;
+}
+
 // Helper function for mul_mat_id, converts ids to a more convenient format.
 // ids_src1 describes how to permute the flattened column indices of src1 in order to get a compact src1 tensor sorted by expert.
 // ids_dst describes the same mapping but for the dst tensor.
@@ -60,8 +69,15 @@ static __global__ void mm_ids_helper(
         }
     } else {
         // Implementation optimized for specific numbers of experts used:
-        static_assert(n_expert_used == 6 || warp_size % n_expert_used == 0, "bad n_expert_used");
-        const int neu_padded = n_expert_used == 6 ? 8 : n_expert_used; // Padded to next higher power of 2.
+        // MI210_NEU_PADDED: pad to the next power of 2 generically instead of
+        // special-casing 6. The scan below steps by neu_padded and
+        // warp_reduce_any<neu_padded> needs a power of 2 dividing warp_size, so
+        // assert on the PADDED width -- the unpadded count never had to divide
+        // anything. Values already dispatched here are unchanged: next_pow2 of
+        // 2/4/8/16/32 is itself, and 6 still pads to 8.
+        constexpr int neu_padded = mm_ids_next_pow2(n_expert_used_template);
+        static_assert(neu_padded <= warp_size && warp_size % neu_padded == 0,
+                      "n_expert_used pads to a width that does not divide the warp");
         for (int it0 = 0; it0 < n_tokens; it0 += warp_size/neu_padded) {
             const int it = it0 + threadIdx.x / neu_padded;
 
@@ -161,6 +177,13 @@ void ggml_cuda_launch_mm_ids_helper(
             break;
         case 32:
             launch_mm_ids_helper<32>(ids, ids_src1, ids_dst, expert_bounds, n_experts, n_tokens, n_expert_used, nchannels_y, si1, sis1, write_inverse, stream);
+            break;
+        // MI210_NEU_PADDED: top-22 routing (Nemotron-3-Super: 22 of 512 experts)
+        // pads to 32 and so can use the fast path. Any other count whose next
+        // power of 2 divides the warp can be added the same way, at the cost of
+        // one more template instantiation.
+        case 22:
+            launch_mm_ids_helper<22>(ids, ids_src1, ids_dst, expert_bounds, n_experts, n_tokens, n_expert_used, nchannels_y, si1, sis1, write_inverse, stream);
             break;
         default:
             launch_mm_ids_helper< 0>(ids, ids_src1, ids_dst, expert_bounds, n_experts, n_tokens, n_expert_used, nchannels_y, si1, sis1, write_inverse, stream);

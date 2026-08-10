@@ -644,7 +644,11 @@ struct ggml_backend_meta_split_state llama_meta_device_get_split_state(const str
                 return {granularity_q};
             }
 
-            const int64_t granularity_kv = granularity_q / n_gqa;
+            // MI210_TP_HYBRID: n_gqa is 0 for layers with no attention heads, which a
+            // hybrid model has (pure FFN/MoE blocks). This is computed before the
+            // tensor is known to be a KV tensor, so an FFN tensor in such a layer
+            // divides by zero here.
+            const int64_t granularity_kv = n_gqa != 0 ? granularity_q / n_gqa : 0;
             if (std::regex_match(tensor_name, pattern_kv_weight) ||
                 std::regex_match(tensor_name, pattern_kv_bias) ||
                 std::regex_match(tensor_name, pattern_kv_cache)) {

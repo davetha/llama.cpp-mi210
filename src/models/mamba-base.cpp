@@ -196,7 +196,11 @@ ggml_tensor * llm_build_mamba_base::build_mamba2_layer(llm_graph_input_rs * inp,
     // conv
     {
         // => {d_conv - 1 + n_seq_tokens, d_inner + 2*n_group*d_state, n_seqs}
-        ggml_tensor * conv_x = ggml_concat(ctx0, conv, ggml_transpose(ctx0, xBC), 0);
+        // MI210_CONV_CONT: materialise the transpose so concat can take its
+        // contiguous path. A bare transposed view is only a stride change, which
+        // sends concat into its own "non-contiguous kernel (slow)" branch where
+        // reads hit one useful dword per cache line.
+        ggml_tensor * conv_x = ggml_concat(ctx0, conv, ggml_cont(ctx0, ggml_transpose(ctx0, xBC)), 0);
 
         // copy last (d_conv - 1) columns back into the state cache
         ggml_tensor * last_conv = ggml_view_3d(ctx0, conv_x, d_conv - 1, d_inner + 2 * n_group * d_state, n_seqs,
