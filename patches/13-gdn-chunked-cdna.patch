@@ -1,0 +1,204 @@
+From 68837151c8d6522df7a39163c6380ef4ace07a14 Mon Sep 17 00:00:00 2001
+From: davetha <davetha@users.noreply.github.com>
+Date: Mon, 10 Aug 2026 17:11:37 +0000
+Subject: [PATCH] CUDA/HIP: make the chunked GDN kernel work on AMD CDNA
+
+Four defects prevented PR #26001 ggml_cuda_mma path from running correctly
+on gfx90a. Each masked the next.
+
+1. cgdr_precompute_qk_wmma_kernel launched a 32-thread block, but AMD MFMA
+   tiles span a full 64-lane wavefront (mma.cuh: ne = I*J/64), so half the
+   16x16 accumulator lanes did not exist. Load and writeback loops assumed
+   32 lanes owned the whole tile.
+2. __launch_bounds__(32, 8) is a hard ceiling, so a 64-thread launch failed
+   outright. Now uses ggml_cuda_get_physical_warp_size(), as mmid.cu does.
+3. Plain load_ldmatrix has no AMD_MFMA branch in mma.cuh (TURING and
+   AMD_WMMA only, then NO_DEVICE_CODE, which traps). The three plain call
+   sites now use load_generic, which is defined via the same get_i/get_j.
+   load_ldmatrix_trans is untouched: it does have an MFMA branch.
+4. The 16x16 f32 accumulator fragment is DATA_LAYOUT_J_MAJOR on CDNA/RDNA4
+   but the kernel declared the default I_MAJOR. mma.cuh J_MAJOR tile swaps
+   get_i/get_j, so every lane wrote its accumulator elements to transposed
+   coordinates and the whole tile was scattered. This was the real defect.
+
+Dispatch widened to admit CDNA; NVIDIA conditions unchanged throughout.
+
+Verified on 2x MI210 (gfx90a), ROCm 7.14:
+  test-backend-ops -o GATED_DELTA_NET: 50/51 on both devices (was 36/51)
+  llama-bench Qwen3.6-40B IQ4_NL: pp2048 606->678 (+11.8%),
+                                  pp8192 911->1021 (+12.1%)
+  temperature 0, 376-token prompt: byte-identical output vs recurrent
+
+Remaining: n_seq_tokens=2048 misses at NMSE ~3e-7 vs a 2e-7 threshold -- a
+precision margin at the most-accumulated shape, not a correctness failure.
+---
+ ggml/src/ggml-cuda/chunk_gated_delta_net.cu | 65 ++++++++++++++++-----
+ ggml/src/ggml-cuda/gated_delta_net.cu       |  9 ++-
+ 2 files changed, 55 insertions(+), 19 deletions(-)
+
+diff --git a/ggml/src/ggml-cuda/chunk_gated_delta_net.cu b/ggml/src/ggml-cuda/chunk_gated_delta_net.cu
+index 0dd6f5947..23e7ec5fe 100644
+--- a/ggml/src/ggml-cuda/chunk_gated_delta_net.cu
++++ b/ggml/src/ggml-cuda/chunk_gated_delta_net.cu
+@@ -15,6 +15,27 @@
+ #define GDN_TC_MMA 0
+ #endif
+ 
++// GDN_ACC_DL: the 16x16 f32 accumulator fragment layout is J_MAJOR on CDNA/RDNA4 and
++// I_MAJOR on NVIDIA. get_i/get_j report where each lane's accumulator element lands, so
++// declaring the wrong layout transposes the mapping and scatters the whole tile to the
++// wrong shared-memory slots. Matches PR #24561, validated 48/48 on MI250X/gfx90a.
++#if defined(AMD_MFMA_AVAILABLE) || (defined(AMD_WMMA_AVAILABLE) && defined(RDNA4))
++#  define CGDR_C_DL ggml_cuda_mma::DATA_LAYOUT_J_MAJOR
++#else
++#  define CGDR_C_DL ggml_cuda_mma::DATA_LAYOUT_I_MAJOR
++#endif
++
++// GDN_MFMA_LOAD: plain load_ldmatrix in mma.cuh has TURING and AMD_WMMA branches but
++// NO AMD_MFMA branch -- on CDNA it falls through to NO_DEVICE_CODE and traps at runtime
++// ("unspecified launch failure"). load_generic is the portable element-wise loader and is
++// defined in terms of the same get_i/get_j, so it is correct for MFMA tile layouts.
++// load_ldmatrix_trans is left alone: it does have an AMD_MFMA branch.
++#if defined(AMD_MFMA_AVAILABLE)
++#  define CGDR_LOAD ggml_cuda_mma::load_generic
++#else
++#  define CGDR_LOAD ggml_cuda_mma::load_ldmatrix
++#endif
++
+ // Check if tensor-core kernels are supported on this architecture; otherwise, fallback or no-op.
+ #if GDN_TC_MMA
+ #  if defined(TURING_MMA_AVAILABLE) || defined(AMD_MFMA_AVAILABLE) || defined(AMD_WMMA_AVAILABLE)
+@@ -40,12 +61,12 @@ template <int BK>
+ __device__ __forceinline__ void cgdr_gemm_ABt_16(const __half * s_a, const __half * s_b, float * s_c, int ldc, int c_col)
+ {
+ #if GDN_TC_MMA
+-    ggml_cuda_mma::tile<16, 16, float> acc;
++    ggml_cuda_mma::tile<16, 16, float, CGDR_C_DL> acc;
+     #pragma unroll
+     for (int kt = 0; kt < BK / 16; kt++) {
+         ggml_cuda_mma::tile<16, 8, half2> ta, tb;
+-        ggml_cuda_mma::load_ldmatrix(ta, (const half2 *) s_a + kt * 8, BK / 2);
+-        ggml_cuda_mma::load_ldmatrix(tb, (const half2 *) s_b + kt * 8, BK / 2);
++        CGDR_LOAD(ta, (const half2 *) s_a + kt * 8, BK / 2);
++        CGDR_LOAD(tb, (const half2 *) s_b + kt * 8, BK / 2);
+         ggml_cuda_mma::mma(acc, ta, tb);
+     }
+     #pragma unroll
+@@ -79,7 +100,7 @@ __device__ __forceinline__ void cgdr_gemm_ktv(const __half * s_vnew, const __hal
+     for (int nk = 0; nk < BK; nk += 16) {
+         ggml_cuda_mma::tile<16, 8, half2> y_kch;
+         ggml_cuda_mma::load_ldmatrix_trans(y_kch, (const half2 *) (s_kch + nk), BK / 2);
+-        ggml_cuda_mma::tile<16, 16, float> acc;
++        ggml_cuda_mma::tile<16, 16, float, CGDR_C_DL> acc;
+         ggml_cuda_mma::mma(acc, x_vnew, y_kch);
+         #pragma unroll
+         for (int l = 0; l < acc.ne; l++) {
+@@ -107,9 +128,9 @@ __device__ __forceinline__ void cgdr_gemm_qkv(const __half * s_qk, const __half
+ {
+ #if GDN_TC_MMA
+     ggml_cuda_mma::tile<16, 8, half2> x_qk, y_vnew;
+-    ggml_cuda_mma::load_ldmatrix(x_qk, (const half2 *) s_qk, 16 / 2);
++    CGDR_LOAD(x_qk, (const half2 *) s_qk, 16 / 2);
+     ggml_cuda_mma::load_ldmatrix_trans(y_vnew, (const half2 *) s_vnew + n_off / 2, BV / 2);
+-    ggml_cuda_mma::tile<16, 16, float> acc;
++    ggml_cuda_mma::tile<16, 16, float, CGDR_C_DL> acc;
+     ggml_cuda_mma::mma(acc, x_qk, y_vnew);
+     #pragma unroll
+     for (int l = 0; l < acc.ne; l++) {
+@@ -283,9 +304,13 @@ __launch_bounds__(128, 4) __global__ void cgdr_fwdsub_intra_kernel(
+ 
+ // Masked Q@K^T on tensor cores (fp16 WMMA, one warp per block):
+ //   qk_buf[i,j] = (Q_ch . K_ch[j]) * exp(g_cum[i] - g_cum[j])   for j <= i, else 0.
+-// Grid (B*H, num_chunks); 32 threads. Requires CS==16, BK%16==0.
++// Grid (B*H, num_chunks); one wavefront per block (32 on NVIDIA, 64 on CDNA).
++// Requires CS==16, BK%16==0.
+ template <int CS, int BK>
+-__launch_bounds__(32, 8) __global__ void cgdr_precompute_qk_wmma_kernel(const float * __restrict__ Q_raw,
++// GDN_WAVE64: launch bounds must match the launch, which is one full wavefront
++// (64 on CDNA). Declaring 32 here made the 64-thread launch fail outright.
++// Same pattern as mmid.cu.
++__launch_bounds__(ggml_cuda_get_physical_warp_size(), 8) __global__ void cgdr_precompute_qk_wmma_kernel(const float * __restrict__ Q_raw,
+                                                                         const float * __restrict__ K_raw,
+                                                                         const float * __restrict__ g_cum,
+                                                                         float * __restrict__ qk_buf,
+@@ -307,7 +332,7 @@ __launch_bounds__(32, 8) __global__ void cgdr_precompute_qk_wmma_kernel(const fl
+ 
+     const int bh  = blockIdx.x;
+     const int c   = blockIdx.y;
+-    const int tid = threadIdx.x;  // 0..31
++    const int tid = threadIdx.x;  // 0..warp_size-1 (GDN_WAVE64)
+ 
+     const int       b_idx = bh / H;
+     const int       h_idx = bh % H;                  // v-head
+@@ -326,7 +351,7 @@ __launch_bounds__(32, 8) __global__ void cgdr_precompute_qk_wmma_kernel(const fl
+     // seq_len is not a multiple of CS -- zero-fill rows past valid_cs to avoid out-of-bounds reads.
+     // Q*scale and K are small (unit-length vectors), so fp16 is safe.
+     const int valid_cs = min(CS, seq_len - t_off);
+-    for (int i = tid; i < CS * BK; i += 32) {
++    for (int i = tid; i < CS * BK; i += blockDim.x) {  // GDN_WAVE64: was hardcoded 32
+         const int   row = i / BK, col = i % BK;
+         const float qv = (row < valid_cs) ? Q_chunk[(long long) row * HK + col] : 0.f;
+         const float kv = (row < valid_cs) ? K_chunk[(long long) row * HK + col] : 0.f;
+@@ -340,11 +365,11 @@ __launch_bounds__(32, 8) __global__ void cgdr_precompute_qk_wmma_kernel(const fl
+     __syncthreads();
+ 
+     // Causal mask + cumulative-decay scaling, then write qk_buf.
+-    float *       O_base = qk_buf + (long long) (bh * num_chunks + c) * CS * CS;
+-    constexpr int EPT    = CS * CS / 32;
+-    #pragma unroll
+-    for (int e = 0; e < EPT; e++) {
+-        const int flat = tid + e * 32;
++    float * O_base = qk_buf + (long long) (bh * num_chunks + c) * CS * CS;
++    // GDN_WAVE64: stride by the actual block size. A 64-lane wavefront owns CS*CS
++    // in half as many steps as a 32-lane warp, so the old constexpr trip count
++    // double-wrote on AMD.
++    for (int flat = tid; flat < CS * CS; flat += blockDim.x) {
+         const int row  = flat / CS;
+         const int col  = flat % CS;
+         O_base[flat]   = (col <= row) ? s_acc[flat] * __expf(s_gcum[row] - s_gcum[col]) : 0.f;
+@@ -704,7 +729,15 @@ static void ggml_cuda_op_gated_delta_net_chunked_impl(ggml_backend_cuda_context
+     {
+         const size_t qk_smem = cgdr_smem_preqk_wmma(CS, K_dim);  // 9.1 KB < 48 KB -> no opt-in needed
+         const dim3   qk_grid(B * H, num_chunks, 1);
+-        cgdr_precompute_qk_wmma_kernel<CS, 128><<<qk_grid, 32, qk_smem, stream>>>(
++        // GDN_WAVE64: one full wavefront. ggml_cuda_mma tiles span all 64 lanes on
++        // CDNA (mma.cuh: ne = I*J/64), so a 32-thread block half-populates the
++        // accumulator. warp_size is 32 on NVIDIA, so that path is unchanged.
++#if GDN_TC_MMA
++        const int qk_block = ggml_cuda_info().devices[ggml_cuda_get_device()].warp_size;
++#else
++        const int qk_block = 32;
++#endif
++        cgdr_precompute_qk_wmma_kernel<CS, 128><<<qk_grid, qk_block, qk_smem, stream>>>(
+             q_in, k_in, g_cum_buf.get(), qk_buf.get(), num_chunks, scale, H, num_k_heads, T);
+     }
+     CUDA_CHECK(cudaGetLastError());
+diff --git a/ggml/src/ggml-cuda/gated_delta_net.cu b/ggml/src/ggml-cuda/gated_delta_net.cu
+index b3977e7ff..6fe4d66b2 100644
+--- a/ggml/src/ggml-cuda/gated_delta_net.cu
++++ b/ggml/src/ggml-cuda/gated_delta_net.cu
+@@ -248,15 +248,18 @@ bool ggml_cuda_gdn_op_is_chunked(const ggml_tensor * dst) {
+         return s && s[0] && !(s[0] == '0' && s[1] == '\0');
+     }();
+     const int  cc_dev    = ggml_cuda_info().devices[ggml_cuda_get_device()].cc;
+-    // NVIDIA-only for now. The HIP/MUSA ggml_cuda_mma backend intentionally not dispatched until validated.
+-    const bool is_nvidia = GGML_CUDA_CC_IS_NVIDIA(cc_dev);
++    // GDN_CDNA: admit CDNA to the ggml_cuda_mma path. CDNA has the fp16 matrix
++    // cores this kernel wants (v_mfma_f32_16x16x16f16). NVIDIA's condition is
++    // unchanged. Deliberately not all of AMD -- RDNA's WMMA path is unvalidated.
++    const bool arch_ok = (GGML_CUDA_CC_IS_NVIDIA(cc_dev) && cc_dev >= GGML_CUDA_CC_AMPERE)
++                      || GGML_CUDA_CC_IS_CDNA(cc_dev);
+ 
+     // - NVIDIA Ampere+ (fp16 WMMA); not KDA; K == 1 (final state only)
+     // - Q/K/G/beta/state must be contiguous
+     //   (nb[0]/nb[1] packed) with arbitrary token stride (fused QKV view) 
+     // - V is packed per token (nb[2]) and across sequences (nb[3] == n_tokens*nb[2]).
+     // - 128-wide heads, GQA-aligned head counts, n_tokens >= 128
+-    return is_nvidia
++    return arch_ok
+         && cc_dev >= GGML_CUDA_CC_AMPERE
+         && !chunk_disabled
+         && !kda && K == 1
+-- 
+2.53.0
+
