@@ -1,8 +1,8 @@
 diff --git a/src/llama-context.cpp b/src/llama-context.cpp
-index eed041e..9634063 100644
+index 0de3a68d1..41b5bbc6b 100644
 --- a/src/llama-context.cpp
 +++ b/src/llama-context.cpp
-@@ -1780,8 +1780,30 @@ int llama_context::decode(const llama_batch & batch_inp) {
+@@ -1735,8 +1735,35 @@ int llama_context::decode(const llama_batch & batch_inp) {
  
      llama_memory_context_ptr mctx;
  
@@ -18,8 +18,13 @@ index eed041e..9634063 100644
 +    //
 +    // Only ever shrinks cparams.n_ubatch, so the compute buffers sized at
 +    // context creation stay valid.
++    //
++    // Gated on cparams.pipeline_parallel: the entire benefit is device overlap,
++    // which only exists when the scheduler is actually pipelining across >1
++    // device. Without it the shrink is pure cost -- more, smaller micro-batches
++    // for nothing.
 +    uint32_t n_ubatch_eff = cparams.n_ubatch;
-+    if (cparams.causal_attn && n_tokens_all >= 2) {
++    if (cparams.pipeline_parallel && cparams.causal_attn && n_tokens_all >= 2) {
 +        uint32_t want = 1;
 +        while (want * 2 <= n_tokens_all / 2) {
 +            want *= 2;

@@ -441,6 +441,24 @@ Only ever shrinks `cparams.n_ubatch`, so compute buffers sized at context
 creation stay valid. Gated on `causal_attn`, because non-causal attention asserts
 `n_ubatch >= n_tokens` a few lines above.
 
+**Gated on `cparams.pipeline_parallel`** (added after the table above was
+taken): the entire benefit is device overlap, which only exists when the
+scheduler actually pipelines across more than one device. Wherever that is
+true the flag is set and behaviour is bit-identical to the old condition by
+construction; on single-device or tensor-override (`-cmoe`) deployments the
+shrink was pure cost — gating it off recovered **+10.0% on short dense
+prefill** (pp512, 1-GPU MI210 serve, 49/49 run separation, worst patched
+sample +9.35% over best control).
+
+A caveat worth knowing, though it is a property of micro-batching itself and
+not of this patch: effective ubatch size is a *numerics* parameter. One
+unmodified build at `-ub 256` vs `-ub 512` moves ~0.8% of greedy-argmax
+tokens (0.44% with `-fa` off; FA stream-k owns the near-tie flips), and this
+patch's before/after reproduces that movement digit-for-digit — it introduces
+no numerical content of its own. A non-pipelined deployment moves from the
+shrunk side back to the plain `-ub` side, i.e. back to upstream-default
+numerics.
+
 **Files (1):** `src/llama-context.cpp`.
 
 ---
