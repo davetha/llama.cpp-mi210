@@ -22,7 +22,7 @@ using namespace cub;
 #define SSM_SSD_MAX_TOKENS (SSM_SSD_DT_BLOCK * SSM_SSD_DT_MAX_ITEMS)
 
 // Chunk size for chunked SSD. Caps matmul cost at O(chunk^2) per chunk.
-#define SSM_SSD_CHUNK_SIZE 256
+#define SSM_SSD_CHUNK_SIZE 128
 
 // We would like to keep pragma unroll for cases where L_template is not 0,
 // so we suppress the clang transformation warning.
@@ -331,7 +331,9 @@ static void ssm_scan_f32_cuda(const float * src0, const float * src1, const floa
     }
 }
 
-#if !defined(GGML_USE_HIP) && !defined(GGML_USE_MUSA)
+// SSD_CDNA: HIP admitted here; the runtime `use_ssd` test below still
+// restricts this to CDNA. MUSA remains excluded (untested).
+#if !defined(GGML_USE_MUSA)
 // ============================================================================
 // SSD (State Space Duality) kernels for Mamba-2 prefill (n_tok > SSM_SSD_MIN_TOKENS)
 //
@@ -752,7 +754,7 @@ static void ssm_scan_ssd_f32_cuda(
         }
     }
 }
-#endif // !defined(GGML_USE_HIP) && !defined(GGML_USE_MUSA)
+#endif // SSD_CDNA: !defined(GGML_USE_MUSA)
 
 void ggml_cuda_op_ssm_scan(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
     const struct ggml_tensor * src0 = dst->src[0];  // s
@@ -808,15 +810,21 @@ void ggml_cuda_op_ssm_scan(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
     GGML_ASSERT(src5->nb[2] <= (size_t)INT_MAX);
     GGML_ASSERT(src5->nb[3] <= (size_t)INT_MAX);
 
-#if !defined(GGML_USE_HIP) && !defined(GGML_USE_MUSA)
+// SSD_CDNA: HIP admitted here; the runtime `use_ssd` test below still
+// restricts this to CDNA. MUSA remains excluded (untested).
+#if !defined(GGML_USE_MUSA)
     // Mamba-2 with scalar A per head: use SSD matmul path for long sequences.
     // Requires NVIDIA Turing+ otherwise fallback to scan.
     const bool is_mamba2 = (src3->nb[1] == sizeof(float));
     const int cc = ggml_cuda_info().devices[ggml_cuda_get_device()].cc;
     const bool use_ssd = is_mamba2 && n_t > SSM_SSD_MIN_TOKENS
                       && n_t <= SSM_SSD_MAX_TOKENS
-                      && GGML_CUDA_CC_IS_NVIDIA(cc)
-                      && cc >= GGML_CUDA_CC_TURING
+                      && ((GGML_CUDA_CC_IS_NVIDIA(cc) && cc >= GGML_CUDA_CC_TURING)
+                          // SSD_CDNA: CDNA has the FP16 matrix cores this path wants
+                          // (v_mfma_f32_16x16x16f16) and full hipBLAS aliases for the
+                          // batched GEMMs. Deliberately NOT all of AMD: RDNA's WMMA
+                          // path is unvalidated here.
+                          || GGML_CUDA_CC_IS_CDNA(cc))
                       && nr % 8 == 0;  // cuBLAS requires 8-element (16-byte) alignment
 
     if (use_ssd) {
