@@ -33,8 +33,8 @@ REPO_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 case "$LINEAGE" in
     cdna2)
         UPSTREAM=${UPSTREAM:-https://github.com/ggml-org/llama.cpp}
-        BASE_REF=${BASE_REF:-67b9b0e}
-        PATCHES=$(ls "$REPO_ROOT"/patches/0[4-9]-*.patch "$REPO_ROOT"/patches/1[01]-*.patch 2>/dev/null | sort)
+        BASE_REF=${BASE_REF:-030ebb558}
+        PATCHES=$(ls "$REPO_ROOT"/patches/0[4-9]-*.patch "$REPO_ROOT"/patches/1[0-4]-*.patch 2>/dev/null | sort)
         ;;
     turboquant)
         UPSTREAM=${UPSTREAM:-https://github.com/TheTom/llama-cpp-turboquant.git}

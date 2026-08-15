@@ -15,7 +15,7 @@ tools/materialize_tree.sh — build a patched tree from patches/ on demand
                     (nothing derived is stored here; patches are the only copy)
 tools/            — patch/revert scripts and the rocprofv3 trace analyser
 tools/rejected/   — patches that were tried and lost, kept with their verdicts
-Dockerfile        — reproducible gfx90a build of change sets 4-13
+Dockerfile        — reproducible gfx90a build of change sets 4-14
 BUILD.md          — the turboquant lineage (change sets 1-3)
 ```
 
@@ -622,6 +622,44 @@ for ~19% of prefill wall clock. That caps *any* chunked implementation at
 speculative decoding sets `K > 1`, so `--spec-type draft-mtp` falls back to
 the recurrent kernel. On this hardware MTP is worth +23% decode against this
 change set's +12% prefill — with a working prompt cache, MTP usually wins.
+
+---
+
+### 14. Prefer MMQ for IQ4_NL on CDNA2  → [`patches/14-iq4nl-mmq-cdna2.patch`](patches/14-iq4nl-mmq-cdna2.patch)
+
+**+26.8% at ne11=256 on a 7B, gains at every batch size tested, decode unmoved.**
+
+The CDNA2 MMQ gate already prefers MMQ unconditionally for Q4_0/Q4_1/Q5_0/Q5_1.
+IQ4_NL has the same shape — 4-bit weights in 32-value sub-blocks — but was left
+to fall through to dequantize + rocBLAS for `ne11 > 128`, which is measurably
+slower at every batch size tested (dense models, llama-bench, r=5,
+whole-process isolated arms):
+
+| | ne11=256 | ne11=512 | ne11=1024 | tg128 |
+|---|---:|---:|---:|---:|
+| DeepHat-7B IQ4_NL | **+26.8%** | +8.4% | +3.1% | +0.2% |
+| Qwen3-1.7B IQ4_NL | **+74.5%** | +7.8% | +2.3% | +0.9% |
+
+Both GGUFs also contain Q8_0 tensors; a build that forced MMQ for Q8_0 alone
+measured +0.10% and −0.07% on these same two models, so the gain is
+attributable to the IQ4_NL tensors. Routing confirmed by kernel trace rather
+than inferred: at ne11=256 and 512 the same 648 dispatches move from
+`dequantize_block_iq4_nl` + `Cijk_*` onto `mul_mat_q<IQ4_NL>`, and the dequant
+kernel disappears from the profile entirely. Perplexity unaffected
+(wikitext-2, 16 chunks: 20.5983 → 20.5942 against ±1.18).
+
+**Dense matmuls only.** The mul_mat_id path already takes MMQ unconditionally
+for any model with more than 64 experts, so a large MoE (e.g. Nemotron-3-Super,
+expert_count 512) sees no change from this patch; the beneficiaries are models
+with dense IQ4_NL tensors.
+
+The added test is a single host-side `cmp` — the compiler's fold of the
+existing four-type check is preserved byte-identically, the CDNA3 range check
+is untouched, and the `mul_mat_q<IQ4_NL>` device kernel object is bit-identical
+before and after. Tested on MI210 only; the clause is scoped to the existing
+CDNA2-reachable branch.
+
+**Files (1):** `ggml/src/ggml-cuda/mmq.cu`.
 
 ---
 
