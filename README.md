@@ -1393,13 +1393,13 @@ fork at:
 c26cbdffcf6fc9b7430cd6b117757e9a3f70b7ea  Merge pull request #225 from TheTom/fix-ui-assets-partial-dist
 ```
 
-Change sets **4-13** are generated against **upstream `ggml-org/llama.cpp`** at:
+Change sets **4-16** are generated against **upstream `ggml-org/llama.cpp`** at:
 
 ```
 030ebb558  Address review comment of PR 25532 (#26852)   (2026-08-10)
 ```
 
-These are different bases. Change sets 4-13 were developed and measured on the
+These are different bases. Change sets 4-16 were developed and measured on the
 upstream tree, **not** on the TurboQuant fork, and have not been tested there.
 The two groups touch disjoint files, so there is no conflict between them in
 principle.
@@ -1426,14 +1426,14 @@ git apply 03-turboquant-wave64-fixes.patch
 # build for gfx90a (see BUILD.md)
 ```
 
-Change sets 4-13 target upstream llama.cpp instead (see "Base commit" above).
+Change sets 4-16 target upstream llama.cpp instead (see "Base commit" above).
 The [`Dockerfile`](Dockerfile) does exactly this; by hand it is:
 
 ```bash
 git clone https://github.com/ggml-org/llama.cpp.git
 cd llama.cpp
 git checkout 030ebb558
-for p in 04 06 08 09 10 11 12 13; do git apply --3way ../patches/$p-*.patch; done
+for p in 04 06 08 09 10 11 12 13 14; do git apply --3way ../patches/$p-*.patch; done
 cmake -B build -DGGML_HIP=ON -DAMDGPU_TARGETS=gfx90a -DGGML_HIP_MMQ_MFMA=ON \
       -DCMAKE_BUILD_TYPE=Release
 cmake --build build --target llama-bench llama-server test-backend-ops -j
