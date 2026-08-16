@@ -15,7 +15,7 @@ tools/materialize_tree.sh — build a patched tree from patches/ on demand
                     (nothing derived is stored here; patches are the only copy)
 tools/            — patch/revert scripts and the rocprofv3 trace analyser
 tools/rejected/   — patches that were tried and lost, kept with their verdicts
-Dockerfile        — reproducible gfx90a build of change sets 4-14
+Dockerfile        — reproducible gfx90a build of change sets 4-16
 BUILD.md          — the turboquant lineage (change sets 1-3)
 ```
 

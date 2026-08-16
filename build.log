@@ -1,0 +1,1075 @@
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 DONE 0.0s
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 2.70kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/rocm/dev-ubuntu-24.04:7.14.0-full
+#2 DONE 0.4s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [internal] load build context
+#4 transferring context: 182.70kB done
+#4 DONE 0.0s
+
+#5 [1/7] FROM docker.io/rocm/dev-ubuntu-24.04:7.14.0-full@sha256:439edaa8f0c4be4a3728e528f87b8a2ea1f051f34cf10b27caa4bd94f562eda7
+#5 resolve docker.io/rocm/dev-ubuntu-24.04:7.14.0-full@sha256:439edaa8f0c4be4a3728e528f87b8a2ea1f051f34cf10b27caa4bd94f562eda7 0.0s done
+#5 sha256:f16c4b393f61fd1845d4568ab2384b3b8f90437ea977cf831b87950f05a8b6e7 0B / 7.77GB 0.2s
+#5 sha256:c5e3644816c06dce0e00e4c230b5512a4c8499af19117b0713c760bee5d590d4 0B / 141.01MB 0.2s
+#5 sha256:a58f4bb2f6df03a67e099ed3733e0678d126a5e262ca689c906eb349692c0032 1.08kB / 1.08kB 0.3s done
+#5 sha256:e72009c186f24db35bf36c39f46c6e60aec7d07ec83046db6faf52c695554a7a 0B / 6.83kB 0.2s
+#5 sha256:e72009c186f24db35bf36c39f46c6e60aec7d07ec83046db6faf52c695554a7a 6.83kB / 6.83kB 0.3s done
+#5 extracting sha256:e72009c186f24db35bf36c39f46c6e60aec7d07ec83046db6faf52c695554a7a 0.0s done
+#5 extracting sha256:a58f4bb2f6df03a67e099ed3733e0678d126a5e262ca689c906eb349692c0032 done
+#5 sha256:c5e3644816c06dce0e00e4c230b5512a4c8499af19117b0713c760bee5d590d4 13.63MB / 141.01MB 0.8s
+#5 sha256:c5e3644816c06dce0e00e4c230b5512a4c8499af19117b0713c760bee5d590d4 23.07MB / 141.01MB 0.9s
+#5 sha256:c5e3644816c06dce0e00e4c230b5512a4c8499af19117b0713c760bee5d590d4 31.46MB / 141.01MB 1.1s
+#5 sha256:c5e3644816c06dce0e00e4c230b5512a4c8499af19117b0713c760bee5d590d4 39.85MB / 141.01MB 1.2s
+#5 sha256:c5e3644816c06dce0e00e4c230b5512a4c8499af19117b0713c760bee5d590d4 49.28MB / 141.01MB 1.4s
+#5 sha256:c5e3644816c06dce0e00e4c230b5512a4c8499af19117b0713c760bee5d590d4 57.67MB / 141.01MB 1.5s
+#5 sha256:c5e3644816c06dce0e00e4c230b5512a4c8499af19117b0713c760bee5d590d4 66.06MB / 141.01MB 1.7s
+#5 sha256:c5e3644816c06dce0e00e4c230b5512a4c8499af19117b0713c760bee5d590d4 74.45MB / 141.01MB 1.8s
+#5 sha256:c5e3644816c06dce0e00e4c230b5512a4c8499af19117b0713c760bee5d590d4 83.89MB / 141.01MB 2.0s
+#5 sha256:c5e3644816c06dce0e00e4c230b5512a4c8499af19117b0713c760bee5d590d4 92.27MB / 141.01MB 2.1s
+#5 sha256:c5e3644816c06dce0e00e4c230b5512a4c8499af19117b0713c760bee5d590d4 99.61MB / 141.01MB 2.3s
+#5 sha256:c5e3644816c06dce0e00e4c230b5512a4c8499af19117b0713c760bee5d590d4 109.05MB / 141.01MB 2.4s
+#5 sha256:c5e3644816c06dce0e00e4c230b5512a4c8499af19117b0713c760bee5d590d4 118.49MB / 141.01MB 2.6s
+#5 sha256:c5e3644816c06dce0e00e4c230b5512a4c8499af19117b0713c760bee5d590d4 126.88MB / 141.01MB 2.7s
+#5 sha256:c5e3644816c06dce0e00e4c230b5512a4c8499af19117b0713c760bee5d590d4 141.01MB / 141.01MB 3.0s done
+#5 extracting sha256:c5e3644816c06dce0e00e4c230b5512a4c8499af19117b0713c760bee5d590d4
+#5 sha256:f16c4b393f61fd1845d4568ab2384b3b8f90437ea977cf831b87950f05a8b6e7 335.54MB / 7.77GB 5.3s
+#5 extracting sha256:c5e3644816c06dce0e00e4c230b5512a4c8499af19117b0713c760bee5d590d4 3.6s done
+#5 sha256:f16c4b393f61fd1845d4568ab2384b3b8f90437ea977cf831b87950f05a8b6e7 707.79MB / 7.77GB 10.4s
+#5 sha256:f16c4b393f61fd1845d4568ab2384b3b8f90437ea977cf831b87950f05a8b6e7 1.10GB / 7.77GB 15.5s
+#5 sha256:f16c4b393f61fd1845d4568ab2384b3b8f90437ea977cf831b87950f05a8b6e7 1.50GB / 7.77GB 20.6s
+#5 sha256:f16c4b393f61fd1845d4568ab2384b3b8f90437ea977cf831b87950f05a8b6e7 1.89GB / 7.77GB 25.5s
+#5 sha256:f16c4b393f61fd1845d4568ab2384b3b8f90437ea977cf831b87950f05a8b6e7 2.28GB / 7.77GB 30.6s
+#5 sha256:f16c4b393f61fd1845d4568ab2384b3b8f90437ea977cf831b87950f05a8b6e7 2.68GB / 7.77GB 35.4s
+#5 sha256:f16c4b393f61fd1845d4568ab2384b3b8f90437ea977cf831b87950f05a8b6e7 3.07GB / 7.77GB 40.4s
+#5 sha256:f16c4b393f61fd1845d4568ab2384b3b8f90437ea977cf831b87950f05a8b6e7 3.43GB / 7.77GB 45.5s
+#5 sha256:f16c4b393f61fd1845d4568ab2384b3b8f90437ea977cf831b87950f05a8b6e7 3.83GB / 7.77GB 50.6s
+#5 sha256:f16c4b393f61fd1845d4568ab2384b3b8f90437ea977cf831b87950f05a8b6e7 4.22GB / 7.77GB 55.4s
+#5 sha256:f16c4b393f61fd1845d4568ab2384b3b8f90437ea977cf831b87950f05a8b6e7 4.61GB / 7.77GB 60.5s
+#5 sha256:f16c4b393f61fd1845d4568ab2384b3b8f90437ea977cf831b87950f05a8b6e7 5.00GB / 7.77GB 65.4s
+#5 sha256:f16c4b393f61fd1845d4568ab2384b3b8f90437ea977cf831b87950f05a8b6e7 5.39GB / 7.77GB 69.9s
+#5 sha256:f16c4b393f61fd1845d4568ab2384b3b8f90437ea977cf831b87950f05a8b6e7 5.79GB / 7.77GB 74.9s
+#5 sha256:f16c4b393f61fd1845d4568ab2384b3b8f90437ea977cf831b87950f05a8b6e7 6.19GB / 7.77GB 79.8s
+#5 sha256:f16c4b393f61fd1845d4568ab2384b3b8f90437ea977cf831b87950f05a8b6e7 6.59GB / 7.77GB 84.8s
+#5 sha256:f16c4b393f61fd1845d4568ab2384b3b8f90437ea977cf831b87950f05a8b6e7 6.98GB / 7.77GB 89.7s
+#5 sha256:f16c4b393f61fd1845d4568ab2384b3b8f90437ea977cf831b87950f05a8b6e7 7.37GB / 7.77GB 94.4s
+#5 sha256:f16c4b393f61fd1845d4568ab2384b3b8f90437ea977cf831b87950f05a8b6e7 7.76GB / 7.77GB 99.5s
+#5 sha256:f16c4b393f61fd1845d4568ab2384b3b8f90437ea977cf831b87950f05a8b6e7 7.77GB / 7.77GB 99.8s done
+#5 extracting sha256:f16c4b393f61fd1845d4568ab2384b3b8f90437ea977cf831b87950f05a8b6e7
+#5 extracting sha256:f16c4b393f61fd1845d4568ab2384b3b8f90437ea977cf831b87950f05a8b6e7 60.8s done
+#5 DONE 160.6s
+
+#6 [2/7] RUN apt-get update && apt-get install -y --no-install-recommends       git cmake ninja-build build-essential python3 libcurl4-openssl-dev ca-certificates     && rm -rf /var/lib/apt/lists/*
+#6 1.927 Get:1 https://repo.amd.com/rocm/packages-multi-arch/ubuntu2404 stable InRelease [2332 B]
+#6 1.978 Get:2 http://security.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+#6 2.046 Get:3 http://archive.ubuntu.com/ubuntu noble InRelease [256 kB]
+#6 2.117 Get:4 https://repo.amd.com/rocm/packages-multi-arch/ubuntu2404 stable/main amd64 Packages [151 kB]
+#6 2.541 Get:5 http://security.ubuntu.com/ubuntu noble-security/restricted amd64 Packages [1657 kB]
+#6 2.861 Get:6 http://archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+#6 3.170 Get:7 http://security.ubuntu.com/ubuntu noble-security/multiverse amd64 Packages [50.0 kB]
+#6 3.202 Get:8 http://archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+#6 3.243 Get:9 http://security.ubuntu.com/ubuntu noble-security/main amd64 Packages [1153 kB]
+#6 3.248 Get:10 http://security.ubuntu.com/ubuntu noble-security/universe amd64 Packages [1524 kB]
+#6 3.401 Get:11 http://archive.ubuntu.com/ubuntu noble/multiverse amd64 Packages [331 kB]
+#6 3.543 Get:12 http://archive.ubuntu.com/ubuntu noble/universe amd64 Packages [19.3 MB]
+#6 4.564 Get:13 http://archive.ubuntu.com/ubuntu noble/main amd64 Packages [1808 kB]
+#6 4.571 Get:14 http://archive.ubuntu.com/ubuntu noble/restricted amd64 Packages [117 kB]
+#6 4.572 Get:15 http://archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [2141 kB]
+#6 4.627 Get:16 http://archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Packages [1768 kB]
+#6 4.652 Get:17 http://archive.ubuntu.com/ubuntu noble-updates/multiverse amd64 Packages [55.8 kB]
+#6 4.667 Get:18 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1478 kB]
+#6 4.706 Get:19 http://archive.ubuntu.com/ubuntu noble-backports/main amd64 Packages [48.9 kB]
+#6 4.707 Get:20 http://archive.ubuntu.com/ubuntu noble-backports/universe amd64 Packages [35.9 kB]
+#6 4.707 Get:21 http://archive.ubuntu.com/ubuntu noble-backports/multiverse amd64 Packages [671 B]
+#6 5.258 Fetched 32.3 MB in 4s (9135 kB/s)
+#6 5.258 Reading package lists...
+#6 5.846 Reading package lists...
+#6 6.419 Building dependency tree...
+#6 6.533 Reading state information...
+#6 6.636 build-essential is already the newest version (12.10ubuntu1).
+#6 6.636 python3 is already the newest version (3.12.3-0ubuntu2.1).
+#6 6.636 ca-certificates is already the newest version (20260601~24.04.1).
+#6 6.636 The following additional packages will be installed:
+#6 6.636   cmake-data git-man libarchive13t64 libcurl3t64-gnutls liberror-perl libicu74
+#6 6.637   libjsoncpp25 librhash0 libuv1t64 libxml2
+#6 6.637 Suggested packages:
+#6 6.637   cmake-doc cmake-format elpa-cmake-mode gettext-base git-daemon-run
+#6 6.637   | git-daemon-sysvinit git-doc git-email git-gui gitk gitweb git-cvs
+#6 6.637   git-mediawiki git-svn lrzip libcurl4-doc libidn-dev libkrb5-dev libldap2-dev
+#6 6.637   librtmp-dev libssh2-1-dev libssl-dev pkg-config
+#6 6.637 Recommended packages:
+#6 6.637   less ssh-client
+#6 6.682 The following NEW packages will be installed:
+#6 6.682   cmake cmake-data git git-man libarchive13t64 libcurl3t64-gnutls
+#6 6.682   libcurl4-openssl-dev liberror-perl libicu74 libjsoncpp25 librhash0 libuv1t64
+#6 6.682   libxml2 ninja-build
+#6 6.968 0 upgraded, 14 newly installed, 0 to remove and 21 not upgraded.
+#6 6.968 Need to get 31.4 MB of archives.
+#6 6.968 After this operation, 117 MB of additional disk space will be used.
+#6 6.968 Get:1 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libicu74 amd64 74.2-1ubuntu3.1 [10.9 MB]
+#6 8.598 Get:2 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libxml2 amd64 2.9.14+dfsg-1.3ubuntu3.8 [764 kB]
+#6 8.618 Get:3 http://archive.ubuntu.com/ubuntu noble/main amd64 libuv1t64 amd64 1.48.0-1.1build1 [97.3 kB]
+#6 8.620 Get:4 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libarchive13t64 amd64 3.7.2-2ubuntu0.8 [383 kB]
+#6 8.830 Get:5 http://archive.ubuntu.com/ubuntu noble/main amd64 libjsoncpp25 amd64 1.9.5-6build1 [82.8 kB]
+#6 8.831 Get:6 http://archive.ubuntu.com/ubuntu noble/main amd64 librhash0 amd64 1.4.3-3build1 [129 kB]
+#6 8.833 Get:7 http://archive.ubuntu.com/ubuntu noble/main amd64 cmake-data all 3.28.3-1build7 [2155 kB]
+#6 9.005 Get:8 http://archive.ubuntu.com/ubuntu noble/main amd64 cmake amd64 3.28.3-1build7 [11.2 MB]
+#6 9.181 Get:9 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libcurl3t64-gnutls amd64 8.5.0-2ubuntu10.11 [334 kB]
+#6 9.183 Get:10 http://archive.ubuntu.com/ubuntu noble/main amd64 liberror-perl all 0.17029-2 [25.6 kB]
+#6 9.183 Get:11 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 git-man all 1:2.43.0-1ubuntu7.3 [1100 kB]
+#6 9.361 Get:12 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 git amd64 1:2.43.0-1ubuntu7.3 [3680 kB]
+#6 9.537 Get:13 http://archive.ubuntu.com/ubuntu noble-updates/main amd64 libcurl4-openssl-dev amd64 8.5.0-2ubuntu10.11 [446 kB]
+#6 9.539 Get:14 http://archive.ubuntu.com/ubuntu noble/universe amd64 ninja-build amd64 1.11.1-2 [129 kB]
+#6 9.853 debconf: delaying package configuration, since apt-utils is not installed
+#6 10.02 Fetched 31.4 MB in 3s (11.0 MB/s)
+#6 10.44 Selecting previously unselected package libicu74:amd64.
+#6 10.44 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 50451 files and directories currently installed.)
+#6 10.50 Preparing to unpack .../00-libicu74_74.2-1ubuntu3.1_amd64.deb ...
+#6 10.97 Unpacking libicu74:amd64 (74.2-1ubuntu3.1) ...
+#6 12.47 Selecting previously unselected package libxml2:amd64.
+#6 12.48 Preparing to unpack .../01-libxml2_2.9.14+dfsg-1.3ubuntu3.8_amd64.deb ...
+#6 12.74 Unpacking libxml2:amd64 (2.9.14+dfsg-1.3ubuntu3.8) ...
+#6 14.99 Selecting previously unselected package libuv1t64:amd64.
+#6 15.00 Preparing to unpack .../02-libuv1t64_1.48.0-1.1build1_amd64.deb ...
+#6 15.04 Unpacking libuv1t64:amd64 (1.48.0-1.1build1) ...
+#6 16.93 Selecting previously unselected package libarchive13t64:amd64.
+#6 16.95 Preparing to unpack .../03-libarchive13t64_3.7.2-2ubuntu0.8_amd64.deb ...
+#6 17.32 Unpacking libarchive13t64:amd64 (3.7.2-2ubuntu0.8) ...
+#6 20.58 Selecting previously unselected package libjsoncpp25:amd64.
+#6 20.60 Preparing to unpack .../04-libjsoncpp25_1.9.5-6build1_amd64.deb ...
+#6 20.89 Unpacking libjsoncpp25:amd64 (1.9.5-6build1) ...
+#6 22.61 Selecting previously unselected package librhash0:amd64.
+#6 22.61 Preparing to unpack .../05-librhash0_1.4.3-3build1_amd64.deb ...
+#6 22.62 Unpacking librhash0:amd64 (1.4.3-3build1) ...
+#6 22.68 Selecting previously unselected package cmake-data.
+#6 22.69 Preparing to unpack .../06-cmake-data_3.28.3-1build7_all.deb ...
+#6 22.70 Unpacking cmake-data (3.28.3-1build7) ...
+#6 23.18 Selecting previously unselected package cmake.
+#6 23.19 Preparing to unpack .../07-cmake_3.28.3-1build7_amd64.deb ...
+#6 23.20 Unpacking cmake (3.28.3-1build7) ...
+#6 23.38 Selecting previously unselected package libcurl3t64-gnutls:amd64.
+#6 23.39 Preparing to unpack .../08-libcurl3t64-gnutls_8.5.0-2ubuntu10.11_amd64.deb ...
+#6 23.40 Unpacking libcurl3t64-gnutls:amd64 (8.5.0-2ubuntu10.11) ...
+#6 23.48 Selecting previously unselected package liberror-perl.
+#6 23.48 Preparing to unpack .../09-liberror-perl_0.17029-2_all.deb ...
+#6 23.49 Unpacking liberror-perl (0.17029-2) ...
+#6 23.55 Selecting previously unselected package git-man.
+#6 23.56 Preparing to unpack .../10-git-man_1%3a2.43.0-1ubuntu7.3_all.deb ...
+#6 23.57 Unpacking git-man (1:2.43.0-1ubuntu7.3) ...
+#6 23.64 Selecting previously unselected package git.
+#6 23.65 Preparing to unpack .../11-git_1%3a2.43.0-1ubuntu7.3_amd64.deb ...
+#6 23.67 Unpacking git (1:2.43.0-1ubuntu7.3) ...
+#6 23.82 Selecting previously unselected package libcurl4-openssl-dev:amd64.
+#6 23.83 Preparing to unpack .../12-libcurl4-openssl-dev_8.5.0-2ubuntu10.11_amd64.deb ...
+#6 23.84 Unpacking libcurl4-openssl-dev:amd64 (8.5.0-2ubuntu10.11) ...
+#6 23.88 Selecting previously unselected package ninja-build.
+#6 23.89 Preparing to unpack .../13-ninja-build_1.11.1-2_amd64.deb ...
+#6 23.90 Unpacking ninja-build (1.11.1-2) ...
+#6 23.95 Setting up libuv1t64:amd64 (1.48.0-1.1build1) ...
+#6 23.96 Setting up libcurl3t64-gnutls:amd64 (8.5.0-2ubuntu10.11) ...
+#6 23.97 Setting up ninja-build (1.11.1-2) ...
+#6 23.99 Setting up liberror-perl (0.17029-2) ...
+#6 24.01 Setting up libcurl4-openssl-dev:amd64 (8.5.0-2ubuntu10.11) ...
+#6 24.04 Setting up libjsoncpp25:amd64 (1.9.5-6build1) ...
+#6 24.08 Setting up libicu74:amd64 (74.2-1ubuntu3.1) ...
+#6 24.12 Setting up librhash0:amd64 (1.4.3-3build1) ...
+#6 24.15 Setting up git-man (1:2.43.0-1ubuntu7.3) ...
+#6 24.57 Setting up cmake-data (3.28.3-1build7) ...
+#6 25.19 Setting up libxml2:amd64 (2.9.14+dfsg-1.3ubuntu3.8) ...
+#6 25.73 Setting up git (1:2.43.0-1ubuntu7.3) ...
+#6 26.48 Setting up libarchive13t64:amd64 (3.7.2-2ubuntu0.8) ...
+#6 27.28 Setting up cmake (3.28.3-1build7) ...
+#6 27.84 Processing triggers for libc-bin (2.39-0ubuntu8.7) ...
+#6 DONE 43.1s
+
+#7 [3/7] WORKDIR /src
+#7 DONE 0.1s
+
+#8 [4/7] RUN git clone https://github.com/ggml-org/llama.cpp .     && git checkout 030ebb558
+#8 0.313 Cloning into '.'...
+#8 24.71 Note: switching to '030ebb558'.
+#8 24.71 
+#8 24.71 You are in 'detached HEAD' state. You can look around, make experimental
+#8 24.71 changes and commit them, and you can discard any commits you make in this
+#8 24.71 state without impacting any branches by switching back to a branch.
+#8 24.71 
+#8 24.71 If you want to create a new branch to retain commits you create, you may
+#8 24.71 do so (now or later) by using -c with the switch command. Example:
+#8 24.71 
+#8 24.71   git switch -c <new-branch-name>
+#8 24.71 
+#8 24.71 Or undo this operation with:
+#8 24.71 
+#8 24.71   git switch -
+#8 24.71 
+#8 24.71 Turn off this advice by setting config variable advice.detachedHead to false
+#8 24.71 
+#8 24.71 HEAD is now at 030ebb558 Address review comment of PR 25532 (#26852)
+#8 DONE 24.9s
+
+#9 [5/7] COPY patches/ /patches/
+#9 DONE 0.1s
+
+#10 [6/7] RUN set -eux;     for p in /patches/0[4-9]-*.patch /patches/1[0-4]-*.patch; do       echo "applying $(basename "$p")"; git apply --3way "$p";     done
+#10 0.149 + basename /patches/04-ssd-mamba2-prefill-cdna.patch
+#10 0.150 + echo applying 04-ssd-mamba2-prefill-cdna.patch
+#10 0.150 + git apply --3way /patches/04-ssd-mamba2-prefill-cdna.patch
+#10 0.150 applying 04-ssd-mamba2-prefill-cdna.patch
+#10 0.850 Applied patch to 'ggml/src/ggml-cuda/ssm-scan.cu' cleanly.
+#10 0.921 + basename /patches/06-mmq-cdna-tile-retune.patch
+#10 0.922 applying 06-mmq-cdna-tile-retune.patch
+#10 0.922 + echo applying 06-mmq-cdna-tile-retune.patch
+#10 0.922 + git apply --3way /patches/06-mmq-cdna-tile-retune.patch
+#10 0.925 Applied patch to 'ggml/src/ggml-cuda/mmq-config-cdna.cuh' cleanly.
+#10 0.928 + basename /patches/08-mmid-generalize-neu-padded.patch
+#10 0.929 + echo applying 08-mmid-generalize-neu-padded.patch
+#10 0.929 + git apply --3way /patches/08-mmid-generalize-neu-padded.patch
+#10 0.929 applying 08-mmid-generalize-neu-padded.patch
+#10 0.932 Applied patch to 'ggml/src/ggml-cuda/mmid.cu' cleanly.
+#10 0.934 + basename /patches/09-mamba-conv-concat-cont.patch
+#10 0.936 + echo applying 09-mamba-conv-concat-cont.patch
+#10 0.936 + git apply --3way /patches/09-mamba-conv-concat-cont.patch
+#10 0.936 applying 09-mamba-conv-concat-cont.patch
+#10 0.939 Applied patch to 'src/models/mamba-base.cpp' cleanly.
+#10 0.942 + basename /patches/10-adaptive-ubatch.patch
+#10 0.943 applying 10-adaptive-ubatch.patch
+#10 0.943 + echo applying 10-adaptive-ubatch.patch
+#10 0.943 + git apply --3way /patches/10-adaptive-ubatch.patch
+#10 0.949 Applied patch to 'src/llama-context.cpp' cleanly.
+#10 0.951 + basename /patches/11-tp-ngqa-div0.patch
+#10 0.952 + echo applying 11-tp-ngqa-div0.patch
+#10 0.952 + git apply --3way /patches/11-tp-ngqa-div0.patch
+#10 0.952 applying 11-tp-ngqa-div0.patch
+#10 0.961 Applied patch to 'src/llama-model.cpp' cleanly.
+#10 0.965 + basename /patches/12-pin-state-restore-rocm-multigpu.patch
+#10 0.966 applying 12-pin-state-restore-rocm-multigpu.patch
+#10 0.966 + echo applying 12-pin-state-restore-rocm-multigpu.patch
+#10 0.966 + git apply --3way /patches/12-pin-state-restore-rocm-multigpu.patch
+#10 0.969 error: repository lacks the necessary blob to perform 3-way merge.
+#10 0.969 Falling back to direct application...
+#10 0.973 + basename /patches/13-gdn-chunked-cdna.patch
+#10 0.974 applying 13-gdn-chunked-cdna.patch
+#10 0.974 + echo applying 13-gdn-chunked-cdna.patch
+#10 0.974 + git apply --3way /patches/13-gdn-chunked-cdna.patch
+#10 0.975 /patches/13-gdn-chunked-cdna.patch:107: trailing whitespace.
+#10 0.975 // Single warp computes C[0:16][c_col:c_col+16] = A[16 x BK] @ B[16 x BK]^T (fp16 inputs, fp32 accum), 
+#10 0.975 /patches/13-gdn-chunked-cdna.patch:962: trailing whitespace.
+#10 0.975     //   (nb[0]/nb[1] packed) with arbitrary token stride (fused QKV view) 
+#10 0.975 Falling back to direct application...
+#10 0.976 Falling back to direct application...
+#10 0.977 Applied patch to 'ggml/src/ggml-cuda/gated_delta_net.cu' cleanly.
+#10 0.977 Applied patch to 'ggml/src/ggml-cuda/gated_delta_net.cuh' cleanly.
+#10 0.986 Applied patch to 'ggml/src/ggml-cuda/ggml-cuda.cu' cleanly.
+#10 1.003 Applied patch to 'tests/test-backend-ops.cpp' cleanly.
+#10 1.011 warning: 2 lines add whitespace errors.
+#10 1.014 + basename /patches/14-iq4nl-mmq-cdna2.patch
+#10 1.015 applying 14-iq4nl-mmq-cdna2.patch
+#10 1.015 + echo applying 14-iq4nl-mmq-cdna2.patch
+#10 1.015 + git apply --3way /patches/14-iq4nl-mmq-cdna2.patch
+#10 1.019 Applied patch to 'ggml/src/ggml-cuda/mmq.cu' cleanly.
+#10 DONE 1.1s
+
+#11 [7/7] RUN cmake -B build       -G Ninja       -DGPU_TARGETS=gfx90a       -DGGML_HIP=ON       -DGGML_HIP_MMQ_MFMA=ON       -DGGML_HIP_GRAPHS=ON       -DGGML_HIP_NO_VMM=ON       -DGGML_HIP_ROCWMMA_FATTN=OFF       -DGGML_RPC=ON       -DGGML_CUDA_FA_ALL_QUANTS=ON       -DCMAKE_BUILD_TYPE=Release       -DLLAMA_BUILD_SERVER=ON       -DLLAMA_BUILD_TESTS=ON       -DLLAMA_CURL=OFF     && cmake --build build --config Release -j"$(nproc)"
+#11 0.305 -- The C compiler identification is GNU 13.3.0
+#11 0.359 -- The CXX compiler identification is GNU 13.3.0
+#11 0.381 -- Detecting C compiler ABI info
+#11 0.441 -- Detecting C compiler ABI info - done
+#11 0.451 -- Check for working C compiler: /usr/bin/cc - skipped
+#11 0.452 -- Detecting C compile features
+#11 0.452 -- Detecting C compile features - done
+#11 0.464 -- Detecting CXX compiler ABI info
+#11 0.532 -- Detecting CXX compiler ABI info - done
+#11 0.543 -- Check for working CXX compiler: /usr/bin/c++ - skipped
+#11 0.543 -- Detecting CXX compile features
+#11 0.544 -- Detecting CXX compile features - done
+#11 0.545 CMAKE_BUILD_TYPE=Release
+#11 0.548 -- Found Git: /usr/bin/git (found version "2.43.0") 
+#11 0.726 -- The ASM compiler identification is GNU
+#11 0.729 -- Found assembler: /usr/bin/cc
+#11 0.754 -- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+#11 0.810 -- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+#11 0.811 -- Found Threads: TRUE  
+#11 0.815 -- Warning: ccache not found - consider installing it for faster compilation or disable this warning with GGML_CCACHE=OFF
+#11 0.833 -- CMAKE_SYSTEM_PROCESSOR: x86_64
+#11 0.833 -- GGML_SYSTEM_ARCH: x86
+#11 1.032 -- Found OpenMP_C: -fopenmp (found version "4.5") 
+#11 1.096 -- Found OpenMP_CXX: -fopenmp (found version "4.5") 
+#11 1.097 -- Found OpenMP: TRUE (found version "4.5")  
+#11 1.099 -- Including CPU backend
+#11 1.099 -- x86 detected
+#11 1.099 -- Adding CPU backend variant ggml-cpu: -march=native 
+#11 2.093 -- The HIP compiler identification is Clang 23.0.0
+#11 2.170 -- Detecting HIP compiler ABI info
+#11 2.692 -- Detecting HIP compiler ABI info - done
+#11 2.702 -- Check for working HIP compiler: /opt/rocm/lib/llvm/bin/clang++ - skipped
+#11 2.702 -- Detecting HIP compile features
+#11 2.703 -- Detecting HIP compile features - done
+#11 2.705 -- HIP: Using hipcc from relative path: /opt/rocm/bin/hipcc
+#11 2.723 -- HIP_PLATFORM using hip_HIPCONFIG_EXECUTABLE: amd
+#11 2.760 -- HIP: Using hipcc from relative path: /opt/rocm/bin/hipcc
+#11 2.784 -- HIP and hipBLAS found
+#11 2.788 -- Including HIP backend
+#11 2.789 -- Using RPC backend
+#11 2.792 --   RDMA transport disabled
+#11 2.792 -- Including RPC backend
+#11 2.797 -- ggml version: 0.19.0
+#11 2.797 -- ggml commit:  030ebb558-dirty
+#11 2.811 -- Could NOT find OpenSSL, try to set the path to OpenSSL root folder in the system variable OPENSSL_ROOT_DIR (missing: OPENSSL_CRYPTO_LIBRARY OPENSSL_INCLUDE_DIR) 
+#11 2.811 CMake Warning at vendor/cpp-httplib/CMakeLists.txt:152 (message):
+#11 2.811   OpenSSL not found, HTTPS support disabled
+#11 2.811 
+#11 2.811 
+#11 2.859 -- Generating embedded license file for target: llama-app
+#11 2.865 -- Configuring done (2.6s)
+#11 3.030 -- Generating done (0.1s)
+#11 3.036 -- Build files have been written to: /src/build
+#11 3.100 [1/719] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/hbm.cpp.o
+#11 3.238 [2/719] Building CXX object ggml/src/CMakeFiles/ggml-base.dir/ggml-threading.cpp.o
+#11 3.440 [3/719] Building CXX object ggml/src/CMakeFiles/ggml-base.dir/ggml.cpp.o
+#11 3.647 [4/719] Building CXX object ggml/src/CMakeFiles/ggml.dir/ggml-backend-dl.cpp.o
+#11 3.655 [5/719] Building C object ggml/src/CMakeFiles/ggml-base.dir/ggml-alloc.c.o
+#11 4.148 [6/719] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/amx/amx.cpp.o
+#11 4.202 [7/719] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/traits.cpp.o
+#11 4.216 [8/719] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/amx/mmq.cpp.o
+#11 4.316 [9/719] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/vec.cpp.o
+#11 4.457 [10/719] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/ggml-cpu.cpp.o
+#11 4.579 [11/719] Building C object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/arch/x86/quants.c.o
+#11 4.584 [12/719] Building CXX object ggml/src/CMakeFiles/ggml-base.dir/ggml-opt.cpp.o
+#11 4.803 [13/719] Building CXX object ggml/src/CMakeFiles/ggml-base.dir/ggml-backend.cpp.o
+#11 4.882 [14/719] Building C object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/ggml-cpu.c.o
+#11 4.890 [15/719] Building CXX object ggml/src/CMakeFiles/ggml.dir/ggml-backend-reg.cpp.o
+#11 5.289 [16/719] Building C object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/quants.c.o
+#11 5.508 [17/719] Building C object ggml/src/CMakeFiles/ggml-base.dir/ggml.c.o
+#11 5.732 [18/719] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/binary-ops.cpp.o
+#11 7.329 [19/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/allreduce.cu.o
+#11 7.421 [20/719] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/unary-ops.cpp.o
+#11 7.603 [21/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/clamp.cu.o
+#11 7.619 [22/719] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/llamafile/sgemm.cpp.o
+#11 7.667 [23/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/arange.cu.o
+#11 7.671 [24/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/col2im-1d.cu.o
+#11 7.686 [25/719] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/arch/x86/repack.cpp.o
+#11 7.742 [26/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/count-equal.cu.o
+#11 7.796 [27/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/diag.cu.o
+#11 7.823 [28/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/add-id.cu.o
+#11 7.866 [29/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/diagmask.cu.o
+#11 7.909 [30/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/argsort.cu.o
+#11 7.911 [31/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/conv2d-dw.cu.o
+#11 7.999 [32/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/conv-transpose-1d.cu.o
+#11 8.034 [33/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/argmax.cu.o
+#11 8.115 [34/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/fattn-tile.cu.o
+#11 8.124 [35/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/acc.cu.o
+#11 8.163 [36/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/conv2d.cu.o
+#11 8.164 [37/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/cumsum.cu.o
+#11 8.202 [38/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/conv2d-transpose.cu.o
+#11 8.232 [39/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/dsv4-hc.cu.o
+#11 8.268 [40/719] Building CXX object ggml/src/CMakeFiles/ggml-base.dir/ggml-backend-meta.cpp.o
+#11 8.295 [41/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/cross-entropy-loss.cu.o
+#11 8.361 [42/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/chunk_gated_delta_net.cu.o
+#11 8.547 [43/719] Building CXX object ggml/src/CMakeFiles/ggml-base.dir/gguf.cpp.o
+#11 8.603 [44/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/fwht.cu.o
+#11 8.828 [45/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/fill.cu.o
+#11 8.935 [46/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/concat.cu.o
+#11 9.419 [47/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/mean.cu.o
+#11 9.466 [48/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/im2col.cu.o
+#11 9.581 [49/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/gated_delta_net.cu.o
+#11 9.875 [50/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/gla.cu.o
+#11 10.01 [51/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/mmf.cu.o
+#11 10.37 [52/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/mmid.cu.o
+#11 10.44 [53/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/cpy.cu.o
+#11 10.80 [54/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/convert.cu.o
+#11 11.60 [55/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/norm.cu.o
+#11 11.87 [56/719] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/repack.cpp.o
+#11 12.04 [57/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/pool2d.cu.o
+#11 12.09 [58/719] Building C object ggml/src/CMakeFiles/ggml-base.dir/ggml-quants.c.o
+#11 12.18 [59/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/opt-step-adamw.cu.o
+#11 12.27 [60/719] Linking CXX shared library bin/libggml-base.so.0.19.0
+#11 12.30 [61/719] Creating library symlink bin/libggml-base.so.0 bin/libggml-base.so
+#11 12.51 [62/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/opt-step-sgd.cu.o
+#11 12.52 [63/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/out-prod.cu.o
+#11 12.63 [64/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/roll.cu.o
+#11 12.64 [65/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/pad.cu.o
+#11 12.74 [66/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/scale.cu.o
+#11 12.76 [67/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/set.cu.o
+#11 12.85 [68/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/sum.cu.o
+#11 12.88 [69/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/softcap.cu.o
+#11 12.94 [70/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/snake.cu.o
+#11 12.96 [71/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/pad_reflect_1d.cu.o
+#11 13.00 [72/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/tsembd.cu.o
+#11 13.17 [73/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/sumrows.cu.o
+#11 13.18 [74/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/top-k.cu.o
+#11 13.27 [75/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/mmq.cu.o
+#11 13.35 [76/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/tri.cu.o
+#11 13.41 [77/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/lightning-indexer.cu.o
+#11 13.45 [78/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/upscale.cu.o
+#11 14.53 [79/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/softmax.cu.o
+#11 14.55 [80/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/ggml-cuda.cu.o
+#11 14.56 [81/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/set-rows.cu.o
+#11 14.61 [82/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/quantize.cu.o
+#11 14.94 [83/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/ssm-conv.cu.o
+#11 14.96 [84/719] Building CXX object ggml/src/CMakeFiles/ggml-cpu.dir/ggml-cpu/ops.cpp.o
+#11 15.05 [85/719] Linking CXX shared library bin/libggml-cpu.so.0.19.0
+#11 15.05 [86/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/unary.cu.o
+#11 15.06 [87/719] Creating library symlink bin/libggml-cpu.so.0 bin/libggml-cpu.so
+#11 15.12 [88/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/ssm-scan.cu.o
+#11 15.36 [89/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/wkv.cu.o
+#11 15.58 [90/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/topk-moe.cu.o
+#11 16.37 [91/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/solve_tri.cu.o
+#11 17.20 [92/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/rope.cu.o
+#11 17.58 [93/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/getrows.cu.o
+#11 18.20 [94/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-tile-instance-dkq320-dv256.cu.o
+#11 18.90 [95/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-mma-f16-instance-ncols1_1-ncols2_32.cu.o
+#11 19.00 [96/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-mma-f16-instance-ncols1_2-ncols2_32.cu.o
+#11 20.35 [97/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-tile-instance-dkq192-dv128.cu.o
+#11 20.66 [98/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-mma-f16-instance-ncols1_1-ncols2_16.cu.o
+#11 20.77 [99/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-mma-f16-instance-ncols1_4-ncols2_16.cu.o
+#11 21.46 [100/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-mma-f16-instance-ncols1_2-ncols2_16.cu.o
+#11 21.71 [101/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-mma-f16-instance-ncols1_1-ncols2_8.cu.o
+#11 21.98 [102/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-mma-f16-instance-ncols1_2-ncols2_4.cu.o
+#11 22.72 [103/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-mma-f16-instance-ncols1_8-ncols2_1.cu.o
+#11 22.83 [104/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-mma-f16-instance-ncols1_4-ncols2_2.cu.o
+#11 24.85 [105/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/fattn.cu.o
+#11 28.80 [106/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/binbcast.cu.o
+#11 29.52 [107/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-tile-instance-dkq40-dv40.cu.o
+#11 31.92 [108/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-tile-instance-dkq112-dv112.cu.o
+#11 33.15 [109/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-tile-instance-dkq96-dv96.cu.o
+#11 33.23 [110/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-tile-instance-dkq72-dv72.cu.o
+#11 33.51 [111/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-tile-instance-dkq80-dv80.cu.o
+#11 34.12 [112/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-tile-instance-dkq576-dv512.cu.o
+#11 34.16 [113/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/mmvf.cu.o
+#11 35.01 [114/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-tile-instance-dkq64-dv64.cu.o
+#11 37.69 [115/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-tile-instance-dkq256-dv256.cu.o
+#11 37.82 [116/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-mma-f16-instance-ncols1_8-ncols2_2.cu.o
+#11 37.87 [117/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-mma-f16-instance-ncols1_4-ncols2_4.cu.o
+#11 38.17 [118/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-mma-f16-instance-ncols1_16-ncols2_2.cu.o
+#11 38.38 [119/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-mma-f16-instance-ncols1_16-ncols2_1.cu.o
+#11 38.99 [120/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-mma-f16-instance-ncols1_8-ncols2_4.cu.o
+#11 39.27 [121/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-mma-f16-instance-ncols1_2-ncols2_8.cu.o
+#11 39.44 [122/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmq-instance-iq2_xxs.cu.o
+#11 39.81 [123/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-mma-f16-instance-ncols1_32-ncols2_1.cu.o
+#11 40.08 [124/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmq-instance-iq3_s.cu.o
+#11 40.18 [125/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmq-instance-iq1_s.cu.o
+#11 40.30 [126/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-mma-f16-instance-ncols1_4-ncols2_8.cu.o
+#11 40.35 [127/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmq-instance-iq4_nl.cu.o
+#11 40.61 [128/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmq-instance-iq4_xs.cu.o
+#11 40.72 [129/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmq-instance-iq2_s.cu.o
+#11 41.20 [130/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmq-instance-iq2_xs.cu.o
+#11 41.21 [131/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmq-instance-iq3_xxs.cu.o
+#11 41.56 [132/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-mma-f16-instance-ncols1_32-ncols2_2.cu.o
+#11 41.79 [133/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmq-instance-mxfp4.cu.o
+#11 42.45 [134/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmq-instance-q1_0.cu.o
+#11 42.98 [135/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-mma-f16-instance-ncols1_16-ncols2_4.cu.o
+#11 43.01 [136/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmq-instance-nvfp4.cu.o
+#11 43.40 [137/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmq-instance-q2_0.cu.o
+#11 44.22 [138/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmq-instance-q3_k.cu.o
+#11 44.25 [139/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-tile-instance-dkq512-dv512.cu.o
+#11 44.49 [140/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmq-instance-q4_1.cu.o
+#11 44.60 [141/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmq-instance-q4_0.cu.o
+#11 44.81 [142/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-mma-f16-instance-ncols1_8-ncols2_8.cu.o
+#11 44.89 [143/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmq-instance-q4_k.cu.o
+#11 44.94 [144/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmq-instance-q2_k.cu.o
+#11 46.68 [145/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmq-instance-q5_0.cu.o
+#11 46.91 [146/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmq-instance-q5_1.cu.o
+#11 46.99 [147/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-mma-f16-instance-ncols1_64-ncols2_1.cu.o
+#11 47.07 [148/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmq-instance-q8_0.cu.o
+#11 47.36 [149/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmq-instance-q5_k.cu.o
+#11 47.66 [150/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmq-instance-q6_k.cu.o
+#11 49.22 [151/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-tile-instance-dkq128-dv128.cu.o
+#11 52.04 [152/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-f16-bf16.cu.o
+#11 52.76 [153/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-f16-f16.cu.o
+#11 52.94 [154/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmf-instance-ncols_1.cu.o
+#11 53.06 [155/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-bf16-bf16.cu.o
+#11 53.23 [156/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-bf16-f16.cu.o
+#11 54.52 [157/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-f16-q4_1.cu.o
+#11 54.88 [158/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-q4_0-bf16.cu.o
+#11 54.89 [159/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-bf16-q4_0.cu.o
+#11 55.05 [160/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-bf16-q8_0.cu.o
+#11 55.31 [161/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-bf16-q4_1.cu.o
+#11 55.54 [162/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-f16-q4_0.cu.o
+#11 55.64 [163/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-q4_0-f16.cu.o
+#11 55.65 [164/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-f16-q8_0.cu.o
+#11 56.54 [165/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-f16-q5_0.cu.o
+#11 56.97 [166/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-q4_1-f16.cu.o
+#11 57.24 [167/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-q4_1-bf16.cu.o
+#11 57.31 [168/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-bf16-q5_1.cu.o
+#11 57.39 [169/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-q4_0-q8_0.cu.o
+#11 57.52 [170/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-f16-q5_1.cu.o
+#11 57.78 [171/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-q4_0-q4_0.cu.o
+#11 57.99 [172/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-bf16-q5_0.cu.o
+#11 58.22 [173/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-q4_0-q4_1.cu.o
+#11 58.29 [174/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/mmvq.cu.o
+#11 58.51 [175/719] Building CXX object ggml/src/ggml-rpc/CMakeFiles/ggml-rpc.dir/transport.cpp.o
+#11 59.89 [176/719] Building CXX object src/CMakeFiles/llama.dir/llama.cpp.o
+#11 59.98 [177/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmf-instance-ncols_11.cu.o
+#11 60.45 [178/719] Building CXX object src/CMakeFiles/llama.dir/llama-adapter.cpp.o
+#11 60.53 [179/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-q4_1-q4_0.cu.o
+#11 60.56 [180/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-q5_0-f16.cu.o
+#11 60.59 [181/719] Building CXX object src/CMakeFiles/llama.dir/llama-arch.cpp.o
+#11 60.78 [182/719] Building CXX object src/CMakeFiles/llama.dir/llama-cparams.cpp.o
+#11 60.85 [183/719] Building CXX object src/CMakeFiles/llama.dir/llama-hparams.cpp.o
+#11 61.05 [184/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-q4_0-q5_0.cu.o
+#11 61.08 [185/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-q4_0-q5_1.cu.o
+#11 61.11 [186/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-q4_1-q8_0.cu.o
+#11 61.15 [187/719] Building CXX object src/CMakeFiles/llama.dir/llama-io.cpp.o
+#11 61.18 [188/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmf-instance-ncols_10.cu.o
+#11 61.23 [189/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-q5_0-bf16.cu.o
+#11 61.24 [190/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-q4_1-q4_1.cu.o
+#11 61.25 [191/719] Building CXX object ggml/src/ggml-rpc/CMakeFiles/ggml-rpc.dir/ggml-rpc.cpp.o
+#11 61.30 [192/719] Building CXX object src/CMakeFiles/llama.dir/llama-batch.cpp.o
+#11 61.31 [193/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmf-instance-ncols_2.cu.o
+#11 61.32 [194/719] Linking CXX shared library bin/libggml-rpc.so.0.19.0
+#11 61.35 [195/719] Creating library symlink bin/libggml-rpc.so.0 bin/libggml-rpc.so
+#11 61.62 [196/719] Building CXX object src/CMakeFiles/llama.dir/llama-impl.cpp.o
+#11 61.91 [197/719] Building CXX object src/CMakeFiles/llama.dir/llama-memory.cpp.o
+#11 62.33 [198/719] Building CXX object src/CMakeFiles/llama.dir/llama-mmap.cpp.o
+#11 62.44 [199/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-q4_1-q5_1.cu.o
+#11 62.64 [200/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmf-instance-ncols_3.cu.o
+#11 62.74 [201/719] Building CXX object src/CMakeFiles/llama.dir/llama-chat.cpp.o
+#11 62.96 [202/719] Building CXX object src/CMakeFiles/llama.dir/llama-kv-cache-dsa.cpp.o
+#11 63.01 [203/719] Building CXX object src/CMakeFiles/llama.dir/llama-kv-cache-iswa.cpp.o
+#11 63.12 [204/719] Building CXX object src/CMakeFiles/llama.dir/llama-model-saver.cpp.o
+#11 63.28 [205/719] Building CXX object src/CMakeFiles/llama.dir/llama-memory-hybrid.cpp.o
+#11 63.34 [206/719] Building CXX object src/CMakeFiles/llama.dir/llama-kv-cache-msa.cpp.o
+#11 63.53 [207/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmf-instance-ncols_12.cu.o
+#11 63.53 [208/719] Building CXX object src/CMakeFiles/llama.dir/llama-memory-hybrid-iswa.cpp.o
+#11 63.81 [209/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-q5_0-q4_0.cu.o
+#11 63.91 [210/719] Building CXX object src/CMakeFiles/llama.dir/llama-memory-recurrent.cpp.o
+#11 64.25 [211/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-q4_1-q5_0.cu.o
+#11 64.48 [212/719] Building CXX object src/CMakeFiles/llama.dir/unicode-data.cpp.o
+#11 64.48 [213/719] Building CXX object src/CMakeFiles/llama.dir/models/apertus.cpp.o
+#11 64.68 [214/719] Building CXX object src/CMakeFiles/llama.dir/models/arcee.cpp.o
+#11 64.68 [215/719] Building CXX object src/CMakeFiles/llama.dir/models/afmoe.cpp.o
+#11 64.78 [216/719] Building CXX object src/CMakeFiles/llama.dir/models/arwkv7.cpp.o
+#11 64.79 [217/719] Building CXX object src/CMakeFiles/llama.dir/models/arctic.cpp.o
+#11 65.00 [218/719] Building CXX object src/CMakeFiles/llama.dir/models/baichuan.cpp.o
+#11 65.03 [219/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmf-instance-ncols_4.cu.o
+#11 65.16 [220/719] Building CXX object src/CMakeFiles/llama.dir/models/bailingmoe.cpp.o
+#11 65.73 [221/719] Building CXX object src/CMakeFiles/llama.dir/models/bert.cpp.o
+#11 65.74 [222/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmf-instance-ncols_14.cu.o
+#11 65.75 [223/719] Building CXX object src/CMakeFiles/llama.dir/llama-context.cpp.o
+#11 65.78 [224/719] Building CXX object src/CMakeFiles/llama.dir/models/bailingmoe2.cpp.o
+#11 65.86 [225/719] Building CXX object src/CMakeFiles/llama.dir/models/bitnet.cpp.o
+#11 65.90 [226/719] Building CXX object src/CMakeFiles/llama.dir/models/clip.cpp.o
+#11 65.96 [227/719] Building CXX object src/CMakeFiles/llama.dir/llama-graph.cpp.o
+#11 65.97 [228/719] Building CXX object src/CMakeFiles/llama.dir/models/chatglm.cpp.o
+#11 66.02 [229/719] Building CXX object src/CMakeFiles/llama.dir/models/chameleon.cpp.o
+#11 66.02 [230/719] Building CXX object src/CMakeFiles/llama.dir/models/bloom.cpp.o
+#11 66.18 [231/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmf-instance-ncols_5.cu.o
+#11 66.31 [232/719] Building CXX object src/CMakeFiles/llama.dir/models/cohere2.cpp.o
+#11 66.36 [233/719] Building CXX object src/CMakeFiles/llama.dir/models/cogvlm.cpp.o
+#11 66.37 [234/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmf-instance-ncols_13.cu.o
+#11 66.37 [235/719] Building CXX object src/CMakeFiles/llama.dir/models/codeshell.cpp.o
+#11 66.56 [236/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmf-instance-ncols_15.cu.o
+#11 66.75 [237/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-q5_1-f16.cu.o
+#11 66.81 [238/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmf-instance-ncols_16.cu.o
+#11 66.94 [239/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmf-instance-ncols_6.cu.o
+#11 66.96 [240/719] Building CXX object src/CMakeFiles/llama.dir/models/dbrx.cpp.o
+#11 66.97 [241/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-q5_0-q4_1.cu.o
+#11 66.98 [242/719] Building CXX object src/CMakeFiles/llama.dir/models/command-r.cpp.o
+#11 67.02 [243/719] Building CXX object src/CMakeFiles/llama.dir/models/deci.cpp.o
+#11 67.18 [244/719] Building CXX object src/CMakeFiles/llama.dir/models/deepseek.cpp.o
+#11 67.19 [245/719] Building CXX object src/CMakeFiles/llama.dir/models/deepseek2ocr.cpp.o
+#11 67.22 [246/719] Building CXX object src/CMakeFiles/llama.dir/models/cohere2moe.cpp.o
+#11 67.36 [247/719] Building CXX object src/CMakeFiles/llama.dir/llama-kv-cache-dsv4.cpp.o
+#11 67.40 [248/719] Building CXX object src/CMakeFiles/llama.dir/models/delta-net-base.cpp.o
+#11 67.57 [249/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmf-instance-ncols_7.cu.o
+#11 67.57 [250/719] Building CXX object src/CMakeFiles/llama.dir/models/dream.cpp.o
+#11 67.58 [251/719] Building CXX object src/CMakeFiles/llama.dir/models/ernie4-5-moe.cpp.o
+#11 67.64 [252/719] Building CXX object src/CMakeFiles/llama.dir/models/deepseek2.cpp.o
+#11 67.68 [253/719] Building CXX object src/CMakeFiles/llama.dir/models/dots1.cpp.o
+#11 67.72 [254/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-q8_0-f16.cu.o
+#11 67.81 [255/719] Building CXX object src/CMakeFiles/llama.dir/models/eagle3.cpp.o
+#11 67.81 [256/719] Building CXX object src/CMakeFiles/llama.dir/models/ernie4-5.cpp.o
+#11 67.89 [257/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-q5_1-bf16.cu.o
+#11 68.03 [258/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-q5_0-q8_0.cu.o
+#11 68.10 [259/719] Building CXX object src/CMakeFiles/llama.dir/models/exaone-moe.cpp.o
+#11 68.11 [260/719] Building CXX object src/CMakeFiles/llama.dir/models/deepseek32.cpp.o
+#11 68.19 [261/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-q8_0-bf16.cu.o
+#11 68.20 [262/719] Building CXX object src/CMakeFiles/llama.dir/models/eurobert.cpp.o
+#11 68.22 [263/719] Building CXX object src/CMakeFiles/llama.dir/models/exaone.cpp.o
+#11 68.25 [264/719] Building CXX object src/CMakeFiles/llama.dir/models/falcon-h1.cpp.o
+#11 68.29 [265/719] Building CXX object src/CMakeFiles/llama.dir/models/dflash.cpp.o
+#11 68.32 [266/719] Building CXX object src/CMakeFiles/llama.dir/models/falcon.cpp.o
+#11 68.35 [267/719] Building CXX object src/CMakeFiles/llama.dir/models/deepseek4.cpp.o
+#11 68.35 [268/719] Building CXX object src/CMakeFiles/llama.dir/models/exaone4.cpp.o
+#11 68.37 [269/719] Building CXX object src/CMakeFiles/llama.dir/models/gemma-embedding.cpp.o
+#11 68.44 [270/719] Building CXX object src/CMakeFiles/llama.dir/models/gemma.cpp.o
+#11 68.52 [271/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmf-instance-ncols_8.cu.o
+#11 68.52 [272/719] Building CXX object src/CMakeFiles/llama.dir/llama-grammar.cpp.o
+#11 68.58 [273/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/mmf-instance-ncols_9.cu.o
+#11 68.59 [274/719] Building CXX object src/CMakeFiles/llama.dir/models/gemma2.cpp.o
+#11 68.62 [275/719] Building CXX object src/CMakeFiles/llama.dir/models/gemma3.cpp.o
+#11 68.68 [276/719] Building CXX object src/CMakeFiles/llama.dir/models/gemma4-assistant.cpp.o
+#11 68.84 [277/719] Building CXX object src/CMakeFiles/llama.dir/models/gemma3n.cpp.o
+#11 68.88 [278/719] Building CXX object src/CMakeFiles/llama.dir/models/gpt2.cpp.o
+#11 69.00 [279/719] Building CXX object src/CMakeFiles/llama.dir/models/glm4.cpp.o
+#11 69.01 [280/719] Building CXX object src/CMakeFiles/llama.dir/models/glm4-moe.cpp.o
+#11 69.04 [281/719] Building CXX object src/CMakeFiles/llama.dir/models/granite-moe.cpp.o
+#11 69.06 [282/719] Building CXX object src/CMakeFiles/llama.dir/llama-kv-cache.cpp.o
+#11 69.09 [283/719] Building CXX object src/CMakeFiles/llama.dir/models/gemma4.cpp.o
+#11 69.18 [284/719] Building CXX object src/CMakeFiles/llama.dir/models/gptneox.cpp.o
+#11 69.22 [285/719] Building CXX object src/CMakeFiles/llama.dir/models/granite-hybrid.cpp.o
+#11 69.29 [286/719] Building CXX object src/CMakeFiles/llama.dir/models/hunyuan-dense.cpp.o
+#11 69.38 [287/719] Building CXX object src/CMakeFiles/llama.dir/models/grovemoe.cpp.o
+#11 69.44 [288/719] Building CXX object src/CMakeFiles/llama.dir/models/grok.cpp.o
+#11 69.47 [289/719] Building CXX object src/CMakeFiles/llama.dir/models/glm-dsa.cpp.o
+#11 69.51 [290/719] Building CXX object src/CMakeFiles/llama.dir/models/granite-switch.cpp.o
+#11 69.54 [291/719] Building CXX object src/CMakeFiles/llama.dir/models/jais.cpp.o
+#11 69.55 [292/719] Building CXX object src/CMakeFiles/llama.dir/models/internlm2.cpp.o
+#11 69.55 [293/719] Building CXX object src/CMakeFiles/llama.dir/models/hunyuan-moe.cpp.o
+#11 69.61 [294/719] Building CXX object src/CMakeFiles/llama.dir/models/jais2.cpp.o
+#11 69.61 [295/719] Building CXX object src/CMakeFiles/llama.dir/models/jamba.cpp.o
+#11 69.62 [296/719] Building CXX object src/CMakeFiles/llama.dir/models/jina-bert-v2.cpp.o
+#11 69.64 [297/719] Building CXX object src/CMakeFiles/llama.dir/models/hunyuan-vl.cpp.o
+#11 69.69 [298/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-q5_1-q4_1.cu.o
+#11 69.71 [299/719] Building CXX object src/CMakeFiles/llama.dir/models/jina-bert-v3.cpp.o
+#11 69.72 [300/719] Building CXX object src/CMakeFiles/llama.dir/models/hy-v3.cpp.o
+#11 69.82 [301/719] Building CXX object src/CMakeFiles/llama.dir/models/granite.cpp.o
+#11 69.85 [302/719] Building CXX object src/CMakeFiles/llama.dir/models/llada.cpp.o
+#11 69.89 [303/719] Building CXX object src/CMakeFiles/llama.dir/models/llada-moe.cpp.o
+#11 69.92 [304/719] Building CXX object src/CMakeFiles/llama.dir/models/laguna.cpp.o
+#11 69.95 [305/719] Building CXX object src/CMakeFiles/llama.dir/models/llama-embed.cpp.o
+#11 69.99 [306/719] Building CXX object src/CMakeFiles/llama.dir/models/kimi-linear.cpp.o
+#11 70.08 [307/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-q5_1-q4_0.cu.o
+#11 70.19 [308/719] Building CXX object src/CMakeFiles/llama.dir/llama-vocab.cpp.o
+#11 70.23 [309/719] Building CXX object src/CMakeFiles/llama.dir/models/lfm2moe.cpp.o
+#11 70.23 [310/719] Building CXX object src/CMakeFiles/llama.dir/llama-quant.cpp.o
+#11 70.25 [311/719] Building CXX object src/CMakeFiles/llama.dir/models/maincoder.cpp.o
+#11 70.33 [312/719] Building CXX object src/CMakeFiles/llama.dir/models/mamba2.cpp.o
+#11 70.34 [313/719] Building CXX object src/CMakeFiles/llama.dir/models/llama.cpp.o
+#11 70.34 [314/719] Building CXX object src/CMakeFiles/llama.dir/models/lfm2.cpp.o
+#11 70.39 [315/719] Building CXX object src/CMakeFiles/llama.dir/models/mamba-base.cpp.o
+#11 70.43 [316/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-q5_0-q5_0.cu.o
+#11 70.44 [317/719] Building CXX object src/CMakeFiles/llama.dir/models/mamba.cpp.o
+#11 70.45 [318/719] Building CXX object src/CMakeFiles/llama.dir/models/llama4.cpp.o
+#11 70.54 [319/719] Building CXX object src/CMakeFiles/llama.dir/models/mellum.cpp.o
+#11 70.57 [320/719] Building CXX object src/CMakeFiles/llama.dir/models/minicpm.cpp.o
+#11 70.65 [321/719] Building CXX object src/CMakeFiles/llama.dir/models/minimax-m2.cpp.o
+#11 70.69 [322/719] Building CXX object src/CMakeFiles/llama.dir/models/mistral4.cpp.o
+#11 70.73 [323/719] Building CXX object src/CMakeFiles/llama.dir/models/minicpm3.cpp.o
+#11 70.76 [324/719] Building CXX object src/CMakeFiles/llama.dir/llama-model-loader.cpp.o
+#11 70.76 [325/719] Building CXX object src/CMakeFiles/llama.dir/models/mimo2.cpp.o
+#11 70.79 [326/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-q5_1-q8_0.cu.o
+#11 70.83 [327/719] Building CXX object src/CMakeFiles/llama.dir/models/modern-bert.cpp.o
+#11 70.87 [328/719] Building CXX object src/CMakeFiles/llama.dir/models/mpt.cpp.o
+#11 70.88 [329/719] Building CXX object src/CMakeFiles/llama.dir/models/mistral3.cpp.o
+#11 70.88 [330/719] Building CXX object src/CMakeFiles/llama.dir/models/nemotron-h-moe.cpp.o
+#11 70.89 [331/719] Building CXX object src/CMakeFiles/llama.dir/models/nanbeige.cpp.o
+#11 70.90 [332/719] Building CXX object src/CMakeFiles/llama.dir/models/muse-glimmer.cpp.o
+#11 70.92 [333/719] Building CXX object src/CMakeFiles/llama.dir/models/nomic-bert-moe.cpp.o
+#11 70.95 [334/719] Building CXX object src/CMakeFiles/llama.dir/models/nemotron.cpp.o
+#11 70.96 [335/719] Building CXX object src/CMakeFiles/llama.dir/models/neo-bert.cpp.o
+#11 70.99 [336/719] Building CXX object src/CMakeFiles/llama.dir/models/nemotron-h.cpp.o
+#11 71.05 [337/719] Building CXX object src/CMakeFiles/llama.dir/models/nomic-bert.cpp.o
+#11 71.17 [338/719] Building CXX object src/CMakeFiles/llama.dir/models/olmo.cpp.o
+#11 71.20 [339/719] Building CXX object src/CMakeFiles/llama.dir/models/openai-moe.cpp.o
+#11 71.21 [340/719] Building CXX object src/CMakeFiles/llama.dir/models/olmoe.cpp.o
+#11 71.24 [341/719] Building CXX object src/CMakeFiles/llama.dir/models/minimax-m3.cpp.o
+#11 71.24 [342/719] Building CXX object src/CMakeFiles/llama.dir/models/olmo2.cpp.o
+#11 71.26 [343/719] Building CXX object src/CMakeFiles/llama.dir/models/openelm.cpp.o
+#11 71.34 [344/719] Building CXX object src/CMakeFiles/llama.dir/models/orion.cpp.o
+#11 71.39 [345/719] Building CXX object src/CMakeFiles/llama.dir/models/paddleocr.cpp.o
+#11 71.39 [346/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-q5_0-q5_1.cu.o
+#11 71.43 [347/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-q8_0-q4_0.cu.o
+#11 71.46 [348/719] Building CXX object src/CMakeFiles/llama.dir/models/pangu-embed.cpp.o
+#11 71.46 [349/719] Building CXX object src/CMakeFiles/llama.dir/models/phimoe.cpp.o
+#11 71.54 [350/719] Building CXX object src/CMakeFiles/llama.dir/models/phi2.cpp.o
+#11 71.57 [351/719] Building CXX object src/CMakeFiles/llama.dir/models/phi3.cpp.o
+#11 71.61 [352/719] Building CXX object src/CMakeFiles/llama.dir/models/plamo.cpp.o
+#11 71.69 [353/719] Building CXX object src/CMakeFiles/llama.dir/models/plm.cpp.o
+#11 71.71 [354/719] Building CXX object src/CMakeFiles/llama.dir/models/qwen2.cpp.o
+#11 71.72 [355/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-q8_0-q4_1.cu.o
+#11 71.73 [356/719] Building CXX object src/CMakeFiles/llama.dir/models/plamo3.cpp.o
+#11 71.74 [357/719] Building CXX object src/CMakeFiles/llama.dir/models/plamo2.cpp.o
+#11 71.78 [358/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-q8_0-q8_0.cu.o
+#11 71.79 [359/719] Building CXX object src/CMakeFiles/llama.dir/models/qwen2moe.cpp.o
+#11 71.81 [360/719] Building CXX object src/CMakeFiles/llama.dir/models/qwen2vl.cpp.o
+#11 71.81 [361/719] Building CXX object common/CMakeFiles/llama-common-base.dir/build-info.cpp.o
+#11 71.86 [362/719] Linking CXX static library common/libllama-common-base.a
+#11 71.88 [363/719] Building CXX object src/CMakeFiles/llama.dir/models/qwen.cpp.o
+#11 71.89 [364/719] Building CXX object src/CMakeFiles/llama.dir/models/qwen3.cpp.o
+#11 71.91 [365/719] Building CXX object src/CMakeFiles/llama.dir/models/qwen3tts.cpp.o
+#11 71.97 [366/719] Building CXX object src/CMakeFiles/llama.dir/models/qwen3moe.cpp.o
+#11 72.09 [367/719] Building CXX object src/CMakeFiles/llama.dir/models/rwkv6-base.cpp.o
+#11 72.10 [368/719] Building CXX object src/CMakeFiles/llama.dir/models/qwen3vl.cpp.o
+#11 72.13 [369/719] Building CXX object src/CMakeFiles/llama.dir/llama-sampler.cpp.o
+#11 72.13 [370/719] Building CXX object src/CMakeFiles/llama.dir/models/rnd1.cpp.o
+#11 72.14 [371/719] Building CXX object src/CMakeFiles/llama.dir/models/refact.cpp.o
+#11 72.18 [372/719] Building CXX object src/CMakeFiles/llama.dir/models/rwkv7-base.cpp.o
+#11 72.18 [373/719] Building CXX object src/CMakeFiles/llama.dir/models/qwen3vlmoe.cpp.o
+#11 72.18 [374/719] Building CXX object src/CMakeFiles/llama.dir/models/rwkv7.cpp.o
+#11 72.24 [375/719] Building CXX object src/CMakeFiles/llama.dir/models/rwkv6.cpp.o
+#11 72.26 [376/719] Building CXX object src/CMakeFiles/llama.dir/models/rwkv6qwen2.cpp.o
+#11 72.31 [377/719] Building CXX object src/CMakeFiles/llama.dir/models/seed-oss.cpp.o
+#11 72.34 [378/719] Building CXX object src/CMakeFiles/llama.dir/models/qwen35moe.cpp.o
+#11 72.36 [379/719] Building CXX object src/CMakeFiles/llama.dir/models/smallthinker.cpp.o
+#11 72.37 [380/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-q5_1-q5_0.cu.o
+#11 72.38 [381/719] Building CXX object src/CMakeFiles/llama.dir/models/qwen3next.cpp.o
+#11 72.41 [382/719] Building CXX object src/CMakeFiles/llama.dir/models/smollm3.cpp.o
+#11 72.43 [383/719] Building CXX object common/CMakeFiles/llama-common.dir/ngram-mod.cpp.o
+#11 72.44 [384/719] Building CXX object src/CMakeFiles/llama.dir/models/starcoder.cpp.o
+#11 72.46 [385/719] Building CXX object src/CMakeFiles/llama.dir/models/starcoder2.cpp.o
+#11 72.47 [386/719] Building CXX object src/CMakeFiles/llama.dir/models/stablelm.cpp.o
+#11 72.48 [387/719] Building CXX object src/CMakeFiles/llama.dir/models/qwen35.cpp.o
+#11 72.53 [388/719] Building CXX object src/CMakeFiles/llama.dir/models/t5encoder.cpp.o
+#11 72.59 [389/719] Building CXX object common/CMakeFiles/llama-common.dir/llguidance.cpp.o
+#11 72.64 [390/719] Building CXX object src/CMakeFiles/llama.dir/models/xverse.cpp.o
+#11 72.66 [391/719] Building CXX object src/CMakeFiles/llama.dir/models/talkie.cpp.o
+#11 72.70 [392/719] Building CXX object src/CMakeFiles/llama.dir/models/wavtokenizer-dec.cpp.o
+#11 72.72 [393/719] Building CXX object common/CMakeFiles/llama-common.dir/unicode.cpp.o
+#11 72.78 [394/719] Building CXX object src/CMakeFiles/llama.dir/models/t5.cpp.o
+#11 72.80 [395/719] Building CXX object common/CMakeFiles/llama-common.dir/subproc.cpp.o
+#11 72.87 [396/719] Building CXX object src/CMakeFiles/llama.dir/models/step35.cpp.o
+#11 73.21 [397/719] Building CXX object common/CMakeFiles/llama-common.dir/trie.cpp.o
+#11 73.31 [398/719] Building CXX object common/CMakeFiles/llama-common.dir/ngram-map.cpp.o
+#11 73.33 [399/719] Building CXX object common/CMakeFiles/llama-common.dir/log.cpp.o
+#11 73.47 [400/719] Building CXX object common/CMakeFiles/llama-common.dir/imatrix-loader.cpp.o
+#11 73.54 [401/719] Building CXX object common/CMakeFiles/llama-common.dir/console.cpp.o
+#11 73.57 [402/719] Building CXX object common/CMakeFiles/llama-common.dir/reasoning-budget.cpp.o
+#11 73.63 [403/719] Building CXX object common/CMakeFiles/llama-common.dir/ngram-cache.cpp.o
+#11 73.73 [404/719] Building CXX object src/CMakeFiles/llama.dir/llama-model.cpp.o
+#11 73.74 [405/719] Building CXX object src/CMakeFiles/llama.dir/unicode.cpp.o
+#11 73.75 [406/719] Building CXX object tests/CMakeFiles/test-gbnf-validator.dir/test-gbnf-validator.cpp.o
+#11 73.85 [407/719] Building CXX object tests/CMakeFiles/test-sampling.dir/test-sampling.cpp.o
+#11 73.94 [408/719] Building CXX object tests/CMakeFiles/test-chat-peg-parser.dir/peg-parser/simple-tokenize.cpp.o
+#11 73.94 [409/719] Building CXX object common/CMakeFiles/llama-common.dir/jinja/string.cpp.o
+#11 73.97 [410/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-q8_0-q5_0.cu.o
+#11 73.98 [411/719] Building CXX object tests/CMakeFiles/test-reasoning-budget.dir/test-reasoning-budget.cpp.o
+#11 74.02 [412/719] Building CXX object tests/CMakeFiles/test-log.dir/test-log.cpp.o
+#11 74.11 [413/719] Building CXX object tests/CMakeFiles/test-grammar-parser.dir/test-grammar-parser.cpp.o
+#11 74.11 [414/719] Building CXX object tests/CMakeFiles/test-tokenizer-1-bpe.dir/test-tokenizer-1-bpe.cpp.o
+#11 74.19 [415/719] Building CXX object tests/CMakeFiles/test-peg-parser.dir/peg-parser/simple-tokenize.cpp.o
+#11 74.22 [416/719] Building CXX object tests/CMakeFiles/test-tokenizer-0.dir/test-tokenizer-0.cpp.o
+#11 74.25 [417/719] Building CXX object tests/CMakeFiles/test-tokenizer-1-spm.dir/test-tokenizer-1-spm.cpp.o
+#11 74.35 [418/719] Building CXX object common/CMakeFiles/llama-common.dir/jinja/lexer.cpp.o
+#11 74.46 [419/719] Building CXX object tests/CMakeFiles/test-llama-grammar.dir/test-llama-grammar.cpp.o
+#11 74.73 [420/719] Building CXX object tests/CMakeFiles/test-recurrent-state-rollback.dir/test-recurrent-state-rollback.cpp.o
+#11 75.04 [421/719] Building CXX object tests/CMakeFiles/test-model-load-cancel.dir/test-model-load-cancel.cpp.o
+#11 75.13 [422/719] Building CXX object common/CMakeFiles/llama-common.dir/fit.cpp.o
+#11 75.25 [423/719] Building CXX object tests/CMakeFiles/test-autorelease.dir/test-autorelease.cpp.o
+#11 75.52 [424/719] Building CXX object common/CMakeFiles/llama-common.dir/sampling.cpp.o
+#11 75.74 [425/719] Building CXX object tests/CMakeFiles/test-llama-archs.dir/test-llama-archs.cpp.o
+#11 75.87 [426/719] Building CXX object tests/CMakeFiles/test-barrier.dir/test-barrier.cpp.o
+#11 76.19 [427/719] Building CXX object tests/CMakeFiles/test-quantize-fns.dir/test-quantize-fns.cpp.o
+#11 76.20 [428/719] Building CXX object tests/CMakeFiles/test-thread-safety.dir/test-thread-safety.cpp.o
+#11 76.25 [429/719] Building CXX object tests/CMakeFiles/test-opt.dir/test-opt.cpp.o
+#11 76.29 [430/719] Building C object tests/CMakeFiles/test-mtmd-c-api.dir/test-mtmd-c-api.c.o
+#11 76.32 [431/719] Building CXX object common/CMakeFiles/llama-common.dir/chat-auto-parser-helpers.cpp.o
+#11 76.34 [432/719] Building C object tests/CMakeFiles/test-c.dir/test-c.c.o
+#11 76.37 [433/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-q8_0-q5_1.cu.o
+#11 76.37 [434/719] Building CXX object tests/CMakeFiles/test-rope.dir/test-rope.cpp.o
+#11 76.42 [435/719] Building HIP object ggml/src/ggml-hip/CMakeFiles/ggml-hip.dir/__/ggml-cuda/template-instances/fattn-vec-instance-q5_1-q5_1.cu.o
+#11 76.62 [436/719] Building CXX object tests/CMakeFiles/test-arg-parser.dir/test-arg-parser.cpp.o
+#11 76.66 [437/719] Linking HIP shared library bin/libggml-hip.so.0.19.0
+#11 76.66 [438/719] Building CXX object tests/CMakeFiles/test-col2im-1d.dir/test-col2im-1d.cpp.o
+#11 76.67 [439/719] Creating library symlink bin/libggml-hip.so.0 bin/libggml-hip.so
+#11 76.78 [440/719] Linking CXX shared library bin/libggml.so.0.19.0
+#11 76.80 [441/719] Creating library symlink bin/libggml.so.0 bin/libggml.so
+#11 76.86 [442/719] Building CXX object tests/CMakeFiles/test-state-restore-fragmented.dir/test-state-restore-fragmented.cpp.o
+#11 76.94 [443/719] Building CXX object common/CMakeFiles/llama-common.dir/debug.cpp.o
+#11 77.12 [444/719] Building CXX object common/CMakeFiles/llama-common.dir/jinja/parser.cpp.o
+#11 77.13 [445/719] Linking CXX shared library bin/libllama.so.0.0.10358
+#11 77.15 [446/719] Creating library symlink bin/libllama.so.0 bin/libllama.so
+#11 77.18 [447/719] Linking C executable bin/test-c
+#11 77.40 [448/719] Building C object examples/gguf-hash/CMakeFiles/sha1.dir/deps/sha1/sha1.c.o
+#11 77.41 [449/719] Building CXX object tests/CMakeFiles/test-save-load-state.dir/test-save-load-state.cpp.o
+#11 77.48 [450/719] Building CXX object tests/CMakeFiles/test-alloc.dir/test-alloc.cpp.o
+#11 77.57 [451/719] Building C object examples/gguf-hash/CMakeFiles/sha256.dir/deps/sha256/sha256.c.o
+#11 77.81 [452/719] Building CXX object examples/gguf-hash/CMakeFiles/llama-gguf-hash.dir/gguf-hash.cpp.o
+#11 77.92 [453/719] Building CXX object tests/CMakeFiles/test-quantize-perf.dir/test-quantize-perf.cpp.o
+#11 78.10 [454/719] Building CXX object examples/gguf/CMakeFiles/llama-gguf.dir/gguf.cpp.o
+#11 78.18 [455/719] Linking CXX executable bin/llama-gguf
+#11 78.19 [456/719] Building CXX object common/CMakeFiles/llama-common.dir/jinja/runtime.cpp.o
+#11 78.30 [457/719] Building CXX object examples/batched/CMakeFiles/llama-batched.dir/batched.cpp.o
+#11 78.34 [458/719] Building C object examples/gguf-hash/CMakeFiles/xxhash.dir/deps/xxhash/xxhash.c.o
+#11 78.36 [459/719] Building CXX object common/CMakeFiles/llama-common.dir/chat-auto-parser-generator.cpp.o
+#11 78.39 [460/719] Building CXX object examples/eval-callback/CMakeFiles/llama-eval-callback.dir/eval-callback.cpp.o
+#11 78.42 [461/719] Linking CXX executable bin/llama-gguf-hash
+#11 78.71 [462/719] Building CXX object tests/CMakeFiles/test-gguf.dir/test-gguf.cpp.o
+#11 78.76 [463/719] Building CXX object examples/lookup/CMakeFiles/llama-lookup-merge.dir/lookup-merge.cpp.o
+#11 78.86 [464/719] Building CXX object examples/embedding/CMakeFiles/llama-embedding.dir/embedding.cpp.o
+#11 78.88 [465/719] Building CXX object tests/CMakeFiles/test-export-graph-ops.dir/test-export-graph-ops.cpp.o
+#11 78.91 [466/719] Building CXX object examples/simple/CMakeFiles/llama-simple.dir/simple.cpp.o
+#11 78.95 [467/719] Building CXX object tests/CMakeFiles/test-grammar-integration.dir/test-grammar-integration.cpp.o
+#11 78.97 [468/719] Building CXX object common/CMakeFiles/llama-common.dir/speculative.cpp.o
+#11 79.03 [469/719] Building CXX object tests/CMakeFiles/test-quantize-stats.dir/test-quantize-stats.cpp.o
+#11 79.16 [470/719] Building CXX object examples/simple-chat/CMakeFiles/llama-simple-chat.dir/simple-chat.cpp.o
+#11 79.29 [471/719] Building CXX object examples/idle/CMakeFiles/llama-idle.dir/idle.cpp.o
+#11 79.45 [472/719] Building CXX object tests/CMakeFiles/test-backend-sampler.dir/test-backend-sampler.cpp.o
+#11 79.49 [473/719] Building CXX object common/CMakeFiles/llama-common.dir/hf-cache.cpp.o
+#11 79.58 [474/719] Building CXX object common/CMakeFiles/llama-common.dir/jinja/caps.cpp.o
+#11 79.58 [475/719] Building CXX object examples/lookup/CMakeFiles/llama-lookup-create.dir/lookup-create.cpp.o
+#11 79.60 [476/719] Building CXX object tools/batched-bench/CMakeFiles/llama-batched-bench.dir/main.cpp.o
+#11 79.81 [477/719] Building CXX object examples/lookup/CMakeFiles/llama-lookup.dir/lookup.cpp.o
+#11 79.83 [478/719] Building CXX object tests/CMakeFiles/test-peg-parser.dir/peg-parser/test-json-parser.cpp.o
+#11 79.86 [479/719] Building CXX object tools/llama-bench/CMakeFiles/llama-bench.dir/main.cpp.o
+#11 79.87 [480/719] Building CXX object examples/lookahead/CMakeFiles/llama-lookahead.dir/lookahead.cpp.o
+#11 79.90 [481/719] Building CXX object tools/completion/CMakeFiles/llama-completion.dir/main.cpp.o
+#11 80.08 [482/719] Building CXX object examples/diffusion/CMakeFiles/llama-diffusion.dir/diffusion.cpp.o
+#11 80.11 [483/719] Building CXX object tools/perplexity/CMakeFiles/llama-perplexity.dir/main.cpp.o
+#11 80.13 [484/719] Building CXX object examples/lookup/CMakeFiles/llama-lookup-stats.dir/lookup-stats.cpp.o
+#11 80.15 [485/719] Building CXX object tools/quantize/CMakeFiles/llama-quantize.dir/main.cpp.o
+#11 80.16 [486/719] Building CXX object common/CMakeFiles/llama-common.dir/common.cpp.o
+#11 80.27 [487/719] Building CXX object pocs/vdot/CMakeFiles/llama-vdot.dir/vdot.cpp.o
+#11 80.33 [488/719] Building CXX object pocs/vdot/CMakeFiles/llama-q8dot.dir/q8dot.cpp.o
+#11 80.35 [489/719] Linking CXX executable bin/llama-simple
+#11 80.42 [490/719] Building CXX object examples/passkey/CMakeFiles/llama-passkey.dir/passkey.cpp.o
+#11 80.53 [491/719] Building CXX object examples/parallel/CMakeFiles/llama-parallel.dir/parallel.cpp.o
+#11 80.57 [492/719] Building CXX object common/CMakeFiles/llama-common.dir/chat-peg-parser.cpp.o
+#11 80.64 [493/719] Linking CXX executable bin/llama-simple-chat
+#11 80.66 [494/719] Building CXX object examples/training/CMakeFiles/llama-finetune.dir/finetune.cpp.o
+#11 80.79 [495/719] Building CXX object tools/gguf-split/CMakeFiles/llama-gguf-split.dir/gguf-split.cpp.o
+#11 81.08 [496/719] Building CXX object examples/gen-docs/CMakeFiles/llama-gen-docs.dir/gen-docs.cpp.o
+#11 81.09 [497/719] Building CXX object examples/retrieval/CMakeFiles/llama-retrieval.dir/retrieval.cpp.o
+#11 81.20 [498/719] Building CXX object examples/convert-llama2c-to-ggml/CMakeFiles/llama-convert-llama2c-to-ggml.dir/convert-llama2c-to-ggml.cpp.o
+#11 81.23 [499/719] Building CXX object common/CMakeFiles/llama-common.dir/preset.cpp.o
+#11 81.34 [500/719] Building CXX object tests/CMakeFiles/test-batch-alloc.dir/test-batch-alloc.cpp.o
+#11 81.38 [501/719] Building CXX object tests/CMakeFiles/test-peg-parser.dir/test-peg-parser.cpp.o
+#11 81.42 [502/719] Building CXX object tests/CMakeFiles/test-peg-parser.dir/peg-parser/test-unicode.cpp.o
+#11 81.44 [503/719] Building CXX object tests/CMakeFiles/test-peg-parser.dir/peg-parser/test-python-dict-parser.cpp.o
+#11 81.70 [504/719] Building CXX object tools/batched-bench/CMakeFiles/llama-batched-bench-impl.dir/batched-bench.cpp.o
+#11 81.70 [505/719] Building CXX object tests/CMakeFiles/test-model-resolution.dir/test-model-resolution.cpp.o
+#11 81.91 [506/719] Building CXX object tests/CMakeFiles/test-peg-parser.dir/peg-parser/test-json-serialization.cpp.o
+#11 81.94 [507/719] Building CXX object examples/speculative-simple/CMakeFiles/llama-speculative-simple.dir/speculative-simple.cpp.o
+#11 82.14 [508/719] Building CXX object common/CMakeFiles/llama-common.dir/jinja/value.cpp.o
+#11 82.28 [509/719] Building CXX object tools/ui/CMakeFiles/llama-ui-embed.dir/embed.cpp.o
+#11 82.37 [510/719] Building CXX object examples/diffusion/CMakeFiles/llama-diffusion-cli.dir/diffusion-cli.cpp.o
+#11 82.37 [511/719] Linking CXX executable tools/ui/llama-ui-embed
+#11 82.43 [512/719] Building CXX object examples/speculative/CMakeFiles/llama-speculative.dir/speculative.cpp.o
+#11 82.53 [513/719] Building CXX object tests/CMakeFiles/test-peg-parser.dir/peg-parser/test-basic.cpp.o
+#11 82.63 [514/719] Building CXX object tools/tokenize/CMakeFiles/llama-tokenize.dir/tokenize.cpp.o
+#11 82.74 [515/719] Building CXX object tests/CMakeFiles/test-json-schema-to-grammar.dir/test-json-schema-to-grammar.cpp.o
+#11 82.77 [516/719] Building CXX object examples/debug/CMakeFiles/llama-debug.dir/debug.cpp.o
+#11 83.02 [517/719] Building CXX object tools/quantize/CMakeFiles/llama-quantize-impl.dir/quantize.cpp.o
+#11 83.04 [518/719] Building CXX object tools/tts/CMakeFiles/llama-tts.dir/tts.cpp.o
+#11 83.05 [519/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/cogvlm.cpp.o
+#11 83.13 [520/719] Building CXX object tests/CMakeFiles/test-chat-template.dir/test-chat-template.cpp.o
+#11 83.27 [521/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/conformer.cpp.o
+#11 83.37 [522/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/dotsocr.cpp.o
+#11 83.58 [523/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/exaone4_5.cpp.o
+#11 83.82 [524/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/gemma4v.cpp.o
+#11 83.82 [525/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/gemma4a.cpp.o
+#11 83.87 [526/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/gemma4ua.cpp.o
+#11 83.94 [527/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/mtmd-helper-gen.cpp.o
+#11 83.94 [528/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/gemma4uv.cpp.o
+#11 84.11 [529/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/glm4v.cpp.o
+#11 84.26 [530/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/granite-speech.cpp.o
+#11 84.37 [531/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/internvl.cpp.o
+#11 84.46 [532/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/kimivl.cpp.o
+#11 84.48 [533/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/hunyuanvl.cpp.o
+#11 84.58 [534/719] Provisioning UI assets
+#11 84.58 -- UI: npm not found, skipping npm build
+#11 84.58 -- UI: downloading from b10358: https://huggingface.co/buckets/ggml-org/llama-ui/resolve/b10358/dist.tar.gz
+#11 84.58 -- UI: archive verified and extracted
+#11 84.58 -- UI: HF download succeeded, stamp updated (b10358)
+#11 84.58 -- UI: gzip compression applied (/src/build/tools/ui/dist/_gzip)
+#11 84.58 embed: write output file /src/build/tools/ui/ui.h
+#11 84.58 embed: write output file /src/build/tools/ui/ui.cpp
+#11 84.63 [535/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/kimik25.cpp.o
+#11 84.71 [536/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/granite4-vision.cpp.o
+#11 84.73 [537/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/nemotron-v2-vl.cpp.o
+#11 84.90 [538/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/mtmd-audio.cpp.o
+#11 84.92 [539/719] Building CXX object tools/cli/CMakeFiles/llama-cli.dir/main.cpp.o
+#11 85.00 [540/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/muse-glimmer.cpp.o
+#11 85.01 [541/719] Building CXX object tools/completion/CMakeFiles/llama-completion-impl.dir/completion.cpp.o
+#11 85.04 [542/719] Building CXX object tests/CMakeFiles/test-peg-parser.dir/peg-parser/test-gbnf-generation.cpp.o
+#11 85.06 [543/719] Building CXX object tools/server/CMakeFiles/llama-server.dir/main.cpp.o
+#11 85.11 [544/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/mtmd-image.cpp.o
+#11 85.21 [545/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/llama4.cpp.o
+#11 85.29 [546/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/paddleocr.cpp.o
+#11 85.31 [547/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/pixtral.cpp.o
+#11 85.37 [548/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/minicpmv.cpp.o
+#11 85.41 [549/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/llava.cpp.o
+#11 85.43 [550/719] Building CXX object common/CMakeFiles/llama-common.dir/download.cpp.o
+#11 85.44 [551/719] Building CXX object common/CMakeFiles/llama-common.dir/json-schema-to-grammar.cpp.o
+#11 85.50 [552/719] Building CXX object tools/perplexity/CMakeFiles/llama-perplexity-impl.dir/perplexity.cpp.o
+#11 85.50 [553/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/qwen2vl.cpp.o
+#11 85.59 [554/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/minimax-m3.cpp.o
+#11 85.73 [555/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/qwen3vl.cpp.o
+#11 85.81 [556/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/qwen3a.cpp.o
+#11 85.85 [557/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/mimovl.cpp.o
+#11 85.92 [558/719] Building CXX object common/CMakeFiles/llama-common.dir/chat-diff-analyzer.cpp.o
+#11 86.05 [559/719] Building CXX object tools/mtmd/CMakeFiles/llama-llava-cli.dir/deprecation-warning.cpp.o
+#11 86.13 [560/719] Building CXX object tools/mtmd/CMakeFiles/llama-gemma3-cli.dir/deprecation-warning.cpp.o
+#11 86.16 [561/719] Building CXX object tools/mtmd/CMakeFiles/llama-minicpmv-cli.dir/deprecation-warning.cpp.o
+#11 86.19 [562/719] Linking CXX executable bin/llama-llava-cli
+#11 86.21 [563/719] Linking CXX executable bin/llama-gemma3-cli
+#11 86.26 [564/719] Building CXX object tools/mtmd/CMakeFiles/llama-qwen2vl-cli.dir/deprecation-warning.cpp.o
+#11 86.29 [565/719] Linking CXX executable bin/llama-minicpmv-cli
+#11 86.34 [566/719] Linking CXX executable bin/llama-qwen2vl-cli
+#11 86.40 [567/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/mtmd.cpp.o
+#11 86.60 [568/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/mimo-audio.cpp.o
+#11 86.68 [569/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/qwen3tts-spkenc.cpp.o
+#11 86.73 [570/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/whisper-enc.cpp.o
+#11 86.73 [571/719] Building CXX object tools/fit-params/CMakeFiles/llama-fit-params.dir/main.cpp.o
+#11 86.74 [572/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/step3vl.cpp.o
+#11 86.75 [573/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/siglip.cpp.o
+#11 86.76 [574/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/deepseekocr2.cpp.o
+#11 86.77 [575/719] Building CXX object app/CMakeFiles/llama-app.dir/__/license.cpp.o
+#11 86.86 [576/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/deepseekocr.cpp.o
+#11 86.86 [577/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/youtuvl.cpp.o
+#11 86.96 [578/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/parakeet.cpp.o
+#11 86.98 [579/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/yasa2.cpp.o
+#11 87.04 [580/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/mobilenetv5.cpp.o
+#11 87.19 [581/719] Building CXX object app/CMakeFiles/llama-app.dir/llama.cpp.o
+#11 87.73 [582/719] Building CXX object tools/cli/CMakeFiles/llama-cli-impl.dir/cli-client.cpp.o
+#11 87.78 [583/719] Building CXX object tools/cli/CMakeFiles/llama-cli-impl.dir/cli.cpp.o
+#11 87.95 [584/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/models/qwen3tts-gen.cpp.o
+#11 88.02 [585/719] Building CXX object tools/server/CMakeFiles/server-context.dir/server-queue.cpp.o
+#11 88.14 [586/719] Building CXX object app/CMakeFiles/llama-app.dir/download.cpp.o
+#11 88.23 [587/719] Building CXX object tools/fit-params/CMakeFiles/llama-fit-params-impl.dir/fit-params.cpp.o
+#11 88.47 [588/719] Building CXX object tools/results/CMakeFiles/llama-results.dir/results.cpp.o
+#11 88.53 [589/719] Building CXX object tools/mtmd/CMakeFiles/llama-mtmd-debug.dir/debug/mtmd-debug.cpp.o
+#11 88.68 [590/719] Building CXX object tools/parser/CMakeFiles/llama-debug-template-parser.dir/debug-template-parser.cpp.o
+#11 88.74 [591/719] Building CXX object tools/export-lora/CMakeFiles/llama-export-lora.dir/export-lora.cpp.o
+#11 88.78 [592/719] Building CXX object tools/server/CMakeFiles/server-context.dir/server-stream.cpp.o
+#11 88.86 [593/719] Building CXX object tools/parser/CMakeFiles/llama-template-analysis.dir/template-analysis.cpp.o
+#11 88.88 [594/719] Building CXX object tools/cvector-generator/CMakeFiles/llama-cvector-generator.dir/cvector-generator.cpp.o
+#11 89.03 [595/719] Building CXX object tools/server/CMakeFiles/server-context.dir/server-schema.cpp.o
+#11 89.10 [596/719] Building CXX object tools/imatrix/CMakeFiles/llama-imatrix.dir/imatrix.cpp.o
+#11 89.61 [597/719] Building CXX object tools/mtmd/CMakeFiles/llama-mtmd-cli.dir/mtmd-cli.cpp.o
+#11 89.73 [598/719] Building CXX object tools/server/CMakeFiles/server-context.dir/server-chat.cpp.o
+#11 90.19 [599/719] Building CXX object tools/ui/CMakeFiles/llama-ui.dir/ui.cpp.o
+#11 90.22 [600/719] Linking CXX static library tools/ui/libllama-ui.a
+#11 90.38 [601/719] Building CXX object tools/server/CMakeFiles/server-context.dir/server-mcp.cpp.o
+#11 90.41 [602/719] Building CXX object tools/rpc/CMakeFiles/ggml-rpc-server.dir/rpc-server.cpp.o
+#11 90.73 [603/719] Building CXX object tools/server/CMakeFiles/server-context.dir/server-common.cpp.o
+#11 91.20 [604/719] Linking CXX executable bin/ggml-rpc-server
+#11 91.23 [605/719] Building CXX object common/CMakeFiles/llama-common.dir/peg-parser.cpp.o
+#11 91.34 [606/719] Building CXX object tests/CMakeFiles/test-chat-auto-parser.dir/test-chat-auto-parser.cpp.o
+#11 91.36 [607/719] Building CXX object tools/llama-bench/CMakeFiles/llama-bench-impl.dir/llama-bench.cpp.o
+#11 91.55 [608/719] Building CXX object common/CMakeFiles/llama-common.dir/chat.cpp.o
+#11 91.84 [609/719] Building CXX object tests/CMakeFiles/test-chat-peg-parser.dir/test-chat-peg-parser.cpp.o
+#11 92.76 [610/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/clip.cpp.o
+#11 93.13 [611/719] Building CXX object tests/CMakeFiles/test-jinja.dir/test-jinja.cpp.o
+#11 93.39 [612/719] Building CXX object tools/server/CMakeFiles/llama-server-impl.dir/server.cpp.o
+#11 93.48 [613/719] Building CXX object tools/server/CMakeFiles/llama-server-impl.dir/server-http.cpp.o
+#11 93.59 [614/719] Building CXX object tools/cli/CMakeFiles/llama-cli-impl.dir/cli-context.cpp.o
+#11 93.64 [615/719] Building CXX object vendor/cpp-httplib/CMakeFiles/cpp-httplib.dir/httplib.cpp.o
+#11 93.65 [616/719] Building CXX object common/CMakeFiles/llama-common.dir/arg.cpp.o
+#11 93.66 [617/719] Linking CXX static library vendor/cpp-httplib/libcpp-httplib.a
+#11 93.81 [618/719] Linking CXX shared library bin/libllama-common.so.0.0.10358
+#11 93.82 [619/719] Creating library symlink bin/libllama-common.so.0 bin/libllama-common.so
+#11 93.92 [620/719] Linking CXX executable bin/test-quantize-perf
+#11 93.99 [621/719] Linking CXX executable bin/test-rope
+#11 93.99 [622/719] Linking CXX executable bin/test-barrier
+#11 94.01 [623/719] Linking CXX executable bin/test-alloc
+#11 94.01 [624/719] Linking CXX executable bin/test-quantize-fns
+#11 94.01 [625/719] Linking CXX executable bin/test-col2im-1d
+#11 95.23 [626/719] Linking CXX executable bin/test-tokenizer-1-spm
+#11 95.25 [627/719] Linking CXX executable bin/test-llama-grammar
+#11 95.26 [628/719] Linking CXX executable bin/test-model-load-cancel
+#11 95.29 [629/719] Building CXX object tools/mtmd/CMakeFiles/mtmd.dir/mtmd-helper.cpp.o
+#11 95.30 [630/719] Linking CXX executable bin/test-recurrent-state-rollback
+#11 95.30 [631/719] Linking CXX executable bin/test-gbnf-validator
+#11 95.31 [632/719] Linking CXX executable bin/test-jinja
+#11 95.37 [633/719] Linking CXX executable bin/test-chat-peg-parser
+#11 95.37 [634/719] Linking CXX executable bin/test-chat-auto-parser
+#11 95.38 [635/719] Linking CXX executable bin/test-gguf
+#11 95.39 [636/719] Linking CXX executable bin/test-batch-alloc
+#11 95.39 [637/719] Building CXX object tools/server/CMakeFiles/server-context.dir/server-task.cpp.o
+#11 95.39 [638/719] Linking CXX static library examples/diffusion/libllama-diffusion.a
+#11 95.40 [639/719] Linking CXX executable bin/test-arg-parser
+#11 95.41 [640/719] Linking CXX executable bin/test-export-graph-ops
+#11 95.41 [641/719] Linking CXX executable bin/test-llama-archs
+#11 95.42 [642/719] Linking CXX executable bin/test-log
+#11 95.42 [643/719] Linking CXX executable bin/test-tokenizer-0
+#11 95.42 [644/719] Linking CXX executable bin/test-grammar-integration
+#11 95.43 [645/719] Linking CXX executable bin/test-chat-template
+#11 95.43 [646/719] Linking CXX executable bin/llama-debug
+#11 95.43 [647/719] Linking CXX executable bin/test-opt
+#11 95.44 [648/719] Linking CXX executable bin/test-reasoning-budget
+#11 95.44 [649/719] Linking CXX executable bin/llama-embedding
+#11 95.45 [650/719] Linking CXX executable bin/test-json-schema-to-grammar
+#11 95.45 [651/719] Linking CXX executable bin/test-sampling
+#11 95.46 [652/719] Linking CXX executable bin/test-quantize-stats
+#11 95.46 [653/719] Linking CXX executable bin/llama-batched
+#11 95.46 [654/719] Linking CXX executable bin/llama-vdot
+#11 95.47 [655/719] Linking CXX executable bin/test-peg-parser
+#11 95.47 [656/719] Linking CXX executable bin/test-thread-safety
+#11 95.47 [657/719] Linking CXX executable bin/test-save-load-state
+#11 95.49 [658/719] Linking CXX executable bin/llama-q8dot
+#11 95.49 [659/719] Linking CXX executable bin/test-state-restore-fragmented
+#11 95.49 [660/719] Linking CXX executable bin/test-model-resolution
+#11 95.50 [661/719] Linking CXX executable bin/test-backend-sampler
+#11 95.51 [662/719] Linking CXX shared library bin/libllama-batched-bench-impl.so
+#11 95.51 [663/719] Linking CXX executable bin/test-tokenizer-1-bpe
+#11 95.51 [664/719] Linking CXX executable bin/test-autorelease
+#11 95.51 [665/719] Linking CXX executable bin/llama-lookup-merge
+#11 95.51 [666/719] Linking CXX executable bin/llama-eval-callback
+#11 95.53 [667/719] Linking CXX executable bin/llama-idle
+#11 95.53 [668/719] Linking CXX executable bin/llama-lookup
+#11 95.53 [669/719] Linking CXX executable bin/llama-lookup-create
+#11 95.54 [670/719] Linking CXX shared library bin/libllama-fit-params-impl.so
+#11 95.55 [671/719] Linking CXX executable bin/test-grammar-parser
+#11 95.55 [672/719] Linking CXX shared library bin/libllama-quantize-impl.so
+#11 95.55 [673/719] Linking CXX shared library bin/libllama-bench-impl.so
+#11 95.55 [674/719] Linking CXX shared library bin/libllama-perplexity-impl.so
+#11 95.57 [675/719] Linking CXX shared library bin/libmtmd.so.0.0.10358
+#11 95.57 [676/719] Linking CXX shared library bin/libllama-completion-impl.so
+#11 95.58 [677/719] Creating library symlink bin/libmtmd.so.0 bin/libmtmd.so
+#11 95.60 [678/719] Linking CXX executable bin/llama-lookahead
+#11 95.60 [679/719] Linking CXX executable bin/llama-lookup-stats
+#11 96.27 [680/719] Linking CXX executable bin/llama-parallel
+#11 96.32 [681/719] Linking CXX executable bin/llama-speculative-simple
+#11 96.33 [682/719] Linking CXX executable bin/llama-convert-llama2c-to-ggml
+#11 96.38 [683/719] Linking CXX executable bin/llama-template-analysis
+#11 96.38 [684/719] Linking CXX executable bin/llama-diffusion-cli
+#11 96.39 [685/719] Linking CXX executable bin/llama-imatrix
+#11 96.48 [686/719] Linking CXX executable bin/llama-batched-bench
+#11 96.52 [687/719] Linking CXX executable bin/llama-quantize
+#11 96.53 [688/719] Linking CXX executable bin/llama-finetune
+#11 96.53 [689/719] Linking CXX executable bin/llama-bench
+#11 96.53 [690/719] Linking CXX executable bin/llama-fit-params
+#11 96.54 [691/719] Linking CXX executable bin/llama-perplexity
+#11 96.54 [692/719] Linking CXX executable bin/llama-gen-docs
+#11 96.54 [693/719] Linking CXX executable bin/llama-passkey
+#11 96.54 [694/719] Linking CXX executable bin/llama-retrieval
+#11 96.55 [695/719] Linking CXX executable bin/llama-mtmd-debug
+#11 96.56 [696/719] Linking CXX executable bin/llama-gguf-split
+#11 96.58 [697/719] Linking CXX executable bin/llama-debug-template-parser
+#11 96.62 [698/719] Linking CXX executable bin/llama-speculative
+#11 96.65 [699/719] Linking CXX executable bin/llama-results
+#11 96.66 [700/719] Linking CXX executable bin/llama-cvector-generator
+#11 96.67 [701/719] Linking CXX executable bin/llama-tokenize
+#11 96.71 [702/719] Linking CXX executable bin/llama-export-lora
+#11 96.76 [703/719] Linking CXX executable bin/llama-mtmd-cli
+#11 96.77 [704/719] Linking CXX executable bin/llama-completion
+#11 96.77 [705/719] Linking CXX executable bin/llama-tts
+#11 96.82 [706/719] Linking CXX executable bin/test-mtmd-c-api
+#11 97.42 [707/719] Building CXX object tools/server/CMakeFiles/server-context.dir/server-tools.cpp.o
+#11 97.61 [708/719] Building CXX object tests/CMakeFiles/test-backend-ops.dir/test-backend-ops.cpp.o
+#11 98.33 [709/719] Linking CXX executable bin/test-backend-ops
+#11 98.76 [710/719] Building CXX object tests/CMakeFiles/test-chat.dir/test-chat.cpp.o
+#11 99.22 [711/719] Building CXX object tools/server/CMakeFiles/llama-server-impl.dir/server-models.cpp.o
+#11 99.22 [712/719] Building CXX object tools/server/CMakeFiles/server-context.dir/server-context.cpp.o
+#11 99.27 [713/719] Linking CXX static library tools/server/libserver-context.a
+#11 99.40 [714/719] Linking CXX shared library bin/libllama-server-impl.so
+#11 99.46 [715/719] Linking CXX shared library bin/libllama-cli-impl.so
+#11 99.99 [716/719] Linking CXX executable bin/test-chat
+#11 100.1 [717/719] Linking CXX executable bin/llama-server
+#11 100.2 [718/719] Linking CXX executable bin/llama
+#11 100.2 [719/719] Linking CXX executable bin/llama-cli
+#11 DONE 100.3s
+
+#12 exporting to image
+#12 exporting layers
+#12 exporting layers 22.9s done
+#12 exporting manifest sha256:4302cc398717129d0f7dfec64d6f375e036230f3818c66d0ec973cf94bf7a371 0.0s done
+#12 exporting config sha256:4eeb2f1e1fc550b55920d6a87dbdad651afcb386b581703571b061329492f232 0.0s done
+#12 exporting attestation manifest sha256:b92d878715b02b4cd359f8f7e66df97d7563893e3cc751084abfedbb2a9586c0 0.1s done
+#12 exporting manifest list sha256:80ae7a2ae387017b1c9042bcebcc6cc6f153fbfc6b177e174d45b3c2e79dc645
+#12 exporting manifest list sha256:80ae7a2ae387017b1c9042bcebcc6cc6f153fbfc6b177e174d45b3c2e79dc645 done
+#12 naming to docker.io/library/llama-mi210:cs14 done
+#12 unpacking to docker.io/library/llama-mi210:cs14
+#12 unpacking to docker.io/library/llama-mi210:cs14 5.2s done
+#12 DONE 28.2s
