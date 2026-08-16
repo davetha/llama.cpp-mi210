@@ -9,7 +9,7 @@
 # Covers change sets 4-16 (patches/04-*.patch .. 16-*.patch). The turboquant
 # work in patches 01-03 targets a different base tree -- see BUILD.md.
 
-ARG ROCM_TAG=7.1.4-complete
+ARG ROCM_TAG=7.14.0-full
 FROM rocm/dev-ubuntu-24.04:${ROCM_TAG}
 
 # Base commit these patches are cut against.

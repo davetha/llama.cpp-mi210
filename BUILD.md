@@ -4,10 +4,10 @@
 > 1–3 (`patches/01-*` .. `03-*`), which are cut against
 > `llama-cpp-turboquant`, not upstream llama.cpp.
 >
-> For the **CDNA2 prefill work** (change sets 4–11, the SSD/MMQ/rocBLAS
+> For the **CDNA2 prefill work** (change sets 4–14, the SSD/MMQ/rocBLAS
 > material that the README is mostly about) use the
 > [`Dockerfile`](Dockerfile) in the repo root. It pins upstream
-> `ggml-org/llama.cpp` at `030ebb558`, applies patches 04-13, and builds with the
+> `ggml-org/llama.cpp` at `030ebb558`, applies patches 04-16, and builds with the
 > flags those change sets assume — including `GGML_HIP_MMQ_MFMA=ON`, which the
 > retuned tiles in change set 6 depend on, and the `LD_LIBRARY_PATH` that picks
 > AMD's rocBLAS over Ubuntu's.
@@ -18,8 +18,14 @@ all GPU work happens in containers with `/dev/kfd` and `/dev/dri` passed through
 
 ## Prerequisites
 
-- Docker image with ROCm 7.14 + cmake + hipcc + git. On the `big` host this is
-  the prebuilt `llama-rocm714:latest` image.
+- Docker image with ROCm 7.14 + cmake + hipcc + git.
+
+  On the `big` host there is a prebuilt `llama-rocm714:latest` for this, but it
+  is a host-local convenience image (ROCm 7.14 on Ubuntu 26.04) that nothing in
+  this repo builds — do not expect it elsewhere. The reproducible base, and the
+  one the root [`Dockerfile`](Dockerfile) pins, is
+  `rocm/dev-ubuntu-24.04:7.14.0-full`; it works for this lineage too, it just
+  needs the `cmake ninja-build build-essential git` install the Dockerfile does.
 - Both MI210s exposed to the container.
 
 ## 1. Clone + apply patches
