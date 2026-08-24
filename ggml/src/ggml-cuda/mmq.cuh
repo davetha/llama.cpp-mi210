@@ -1475,6 +1475,27 @@ void mul_mat_q_switch_J(ggml_backend_cuda_context & ctx, const mmq_args & args, 
     int J_best        = 0;
     int ntiles_J_best = INT_MAX;
 
+    // MI210_MOE_J: on the mul_mat_id path ncols_max is the whole batch, but a J
+    // tile never spans experts -- the kernel clamps each tile to that expert's
+    // own col_diff and early-returns the rest (see the jt*J >= col_diff guard).
+    // Minimising ceil(ncols_max/J) therefore sizes the tile to what the *batch*
+    // could fill, while the tile that actually runs holds only about
+    // ncols_dst/nchannels_x rows. For 6-of-256 routing at batch 512 that is ~12
+    // rows in a J=64 tile: ~19% occupancy, with 7 of 8 tiles per expert
+    // enumerated only to early-return -- and CDNA takes the stream-k branch, so
+    // those dead tiles still occupy the persistent-block decomposition.
+    //
+    // Size the J *selection* against the expected per-expert load instead. The
+    // tile COUNT is deliberately left alone: launch_mul_mat_q still derives ntx
+    // from ncols_max, routing is non-uniform so a hot expert can need tiles out
+    // to its real col_diff, and a smaller J only adds tiles that early-return.
+    // Shrinking ntx would be a correctness bug.
+    int64_t ncols_sel = args.ncols_max;
+    if (args.ids_dst != nullptr && args.nchannels_x > 0) {
+        const int64_t per_expert = (args.ncols_dst + args.nchannels_x - 1) / args.nchannels_x;
+        ncols_sel = std::min<int64_t>(args.ncols_max, std::max<int64_t>(int64_t(1), per_expert));
+    }
+
     for (int J = 8; J <= 128 && ntiles_J_best > 1; J += 8) {
         const ggml_cuda_mmq_config config = ggml_cuda_mmq_get_config(type, J, fallback, cc);
         if (config.type == GGML_TYPE_COUNT) {
@@ -1485,7 +1506,7 @@ void mul_mat_q_switch_J(ggml_backend_cuda_context & ctx, const mmq_args & args, 
             continue;
         }
 
-        const int ntiles_x = (args.ncols_max + config.J - 1) / config.J;
+        const int ntiles_x = (ncols_sel + config.J - 1) / config.J;
 
         if (ntiles_x < ntiles_J_best) {
             J_best = J;

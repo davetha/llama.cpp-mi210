@@ -1766,7 +1766,9 @@ static __global__ void flash_attn_ext_f16(
 #endif // defined(AMD_WMMA_AVAILABLE)
 
 #if defined(AMD_MFMA_AVAILABLE)
-    if (ncols1*ncols2 < 16 || DKQ > 256) {
+    // MI210_FATTN_HS512: raised from 256 to 576 to match the CDNA config table,
+    // which has tuned 512x512 and 576x512 entries. See fattn.cu.
+    if (ncols1*ncols2 < 16 || DKQ > 576) {
         NO_DEVICE_CODE;
         return;
     }
