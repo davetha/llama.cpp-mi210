@@ -695,7 +695,10 @@ ggml_tensor * llama_model_deepseek4::graph::build_lid_top_k(
         cb(indexer_score, "lid_score_masked", il);
     }
 
-    const uint32_t n_top_k = indexer_score->ne[0] < hparams.indexer_top_k ? indexer_score->ne[0] : hparams.indexer_top_k;
+    uint32_t topk_cap = hparams.indexer_top_k;
+    static const char * dsv4_topk_env = getenv("GGML_DSV4_INDEXER_TOPK");
+    if (dsv4_topk_env) { int v = atoi(dsv4_topk_env); if (v > 0) topk_cap = (uint32_t) v; }
+    const uint32_t n_top_k = (uint32_t) indexer_score->ne[0] < topk_cap ? (uint32_t) indexer_score->ne[0] : topk_cap;
     ggml_tensor * top_k = ggml_cont(ctx0, ggml_top_k(ctx0, indexer_score, n_top_k));
     cb(top_k, "lid_top_k", il);
 
