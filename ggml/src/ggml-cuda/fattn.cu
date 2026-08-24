@@ -4,6 +4,7 @@
 #include "fattn-tile.cuh"
 #include "fattn-vec.cuh"
 #include "fattn.cuh"
+#include "fattn-sparse.cuh"
 
 template <int DKQ, int DV, int ncols2>
 static void ggml_cuda_flash_attn_ext_mma_f16_switch_ncols1(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
@@ -333,6 +334,7 @@ enum best_fattn_kernel {
     BEST_FATTN_KERNEL_TILE    = 200,
     BEST_FATTN_KERNEL_VEC     = 100,
     BEST_FATTN_KERNEL_MMA_F16 = 400,
+    BEST_FATTN_KERNEL_SPARSE  = 500,
 };
 
 static bool ggml_cuda_fattn_kv_type_supported(ggml_type type) {
@@ -366,6 +368,11 @@ static best_fattn_kernel ggml_cuda_get_best_fattn_kernel(const int device, const
     const ggml_tensor * K     = dst->src[1];
     const ggml_tensor * V     = dst->src[2];
     const ggml_tensor * mask  = dst->src[3];
+
+    // DSV4-Flash gather-sparse attention path (top-k indices in src[5]).
+    if (dst->src[5] != nullptr) {
+        return ggml_cuda_flash_attn_ext_sparse_supported(dst) ? BEST_FATTN_KERNEL_SPARSE : BEST_FATTN_KERNEL_NONE;
+    }
 
     const int gqa_ratio = Q->ne[2] / K->ne[2];
     GGML_ASSERT(Q->ne[2] % K->ne[2] == 0);
@@ -499,7 +506,7 @@ static best_fattn_kernel ggml_cuda_get_best_fattn_kernel(const int device, const
     }
 
     // AMD MFMA needs a certain minimum batch size to outscale the tile kernel for large head sizes.
-    if ((amd_mfma_available(cc) && Q->ne[0] <= 256) && Q->ne[0] != 40 && Q->ne[0] != 72) {
+    if ((amd_mfma_available(cc) && Q->ne[0] <= 576) && Q->ne[0] != 40 && Q->ne[0] != 72) {
         if ((Q->ne[0] <= 64 && Q->ne[1] * gqa_ratio_eff > 8)) {
             return BEST_FATTN_KERNEL_MMA_F16;
         }
@@ -507,6 +514,16 @@ static best_fattn_kernel ggml_cuda_get_best_fattn_kernel(const int device, const
             return BEST_FATTN_KERNEL_MMA_F16;
         }
         if ((Q->ne[0] <= 256 && Q->ne[1] * gqa_ratio_eff > 64)) {
+            return BEST_FATTN_KERNEL_MMA_F16;
+        }
+        // MI210_FATTN_HS512: ggml_cuda_fattn_mma_get_config_cdna has tuned
+        // entries for 512x512 and 576x512 at ncols 8/16/32/64, and the dkq512
+        // instances are compiled for gfx90a -- but the old <=256 cap sent every
+        // larger head dim to the tile kernel, which uses no matrix cores at all.
+        // Threshold kept at >64 to match the 256 case: with gqa_ratio_eff = 64
+        // (DeepSeek-V4 is 64 heads over 1 KV head) that admits prefill and
+        // leaves single-token decode on the vector path, which is already fast.
+        if ((Q->ne[0] <= 576 && Q->ne[1] * gqa_ratio_eff > 64)) {
             return BEST_FATTN_KERNEL_MMA_F16;
         }
     }
@@ -580,6 +597,9 @@ void ggml_cuda_flash_attn_ext(ggml_backend_cuda_context & ctx, ggml_tensor * dst
             break;
         case BEST_FATTN_KERNEL_MMA_F16:
             ggml_cuda_flash_attn_ext_mma_f16(ctx, dst);
+            break;
+        case BEST_FATTN_KERNEL_SPARSE:
+            ggml_cuda_flash_attn_ext_sparse(ctx, dst);
             break;
     }
 }

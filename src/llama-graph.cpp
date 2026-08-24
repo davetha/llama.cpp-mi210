@@ -2506,7 +2506,9 @@ ggml_tensor * llm_graph_context::build_attn_mha(
          ggml_tensor * sinks,
          ggml_tensor * v_mla,
                float   kq_scale,
-                 int   il) const {
+                 int   il,
+         ggml_tensor * top_k,
+             int32_t   n_dense) const {
     const bool v_trans = v->nb[1] > v->nb[2];
 
     // split the batch into streams if needed
@@ -2542,6 +2544,7 @@ ggml_tensor * llm_graph_context::build_attn_mha(
         res->add_fused_node({LLM_FUSED_OP_FLASH_ATTN, cur, il});
 
         ggml_flash_attn_ext_add_sinks(cur, sinks);
+        if (top_k) { ggml_flash_attn_ext_add_top_k(cur, top_k, n_dense); } // DSV4 gather-sparse attention
         ggml_flash_attn_ext_set_prec (cur, GGML_PREC_F32);
 
         if (v_mla) {
@@ -2966,7 +2969,15 @@ ggml_tensor * llm_graph_context::build_attn(
     ggml_tensor * k = mctx_cur->get_k(ctx0, il);
     ggml_tensor * v = ggml_view_4d(ctx0, k, v_cur->ne[0], k->ne[1], k->ne[2], k->ne[3], k->nb[1], k->nb[2], k->nb[3], 0);
 
-    ggml_tensor * cur = build_attn_mha(q, k, v, kq_b, kq_mask_top_k, sinks, v_mla, kq_scale, il);
+    // DSV4 gather-sparse attention: when enabled, feed the top_k indices straight into
+    // flash-attn (each query attends only its selected keys) instead of the dense scatter-mask.
+    static const bool dsv4_sparse_attn = (getenv("GGML_DSV4_SPARSE_ATTN") != nullptr);
+    ggml_tensor * cur;
+    if (dsv4_sparse_attn) {
+        cur = build_attn_mha(q, k, v, kq_b, kq_mask, sinks, v_mla, kq_scale, il, top_k);
+    } else {
+        cur = build_attn_mha(q, k, v, kq_b, kq_mask_top_k, sinks, v_mla, kq_scale, il);
+    }
     cb(cur, "kqv_out", il);
 
     if (wo) {

@@ -2437,6 +2437,15 @@ extern "C" {
             struct ggml_tensor * a,
             struct ggml_tensor * sinks);
 
+    // DSV4 sparse attention: attach per-query-token top-k key indices (src[5]).
+    // top_k: I32 [n_top_k, n_batch, 1, n_stream]; each query attends ONLY its
+    // top_k selected keys (gather), instead of the full KV with a scatter-mask.
+    // Result is numerically identical to dense-FA masked to the same top_k set.
+    GGML_API void ggml_flash_attn_ext_add_top_k(
+            struct ggml_tensor * a,
+            struct ggml_tensor * top_k,
+            int32_t              n_dense); // # leading keys attended densely (raw/SWA prefix); top_k indexes the suffix
+
     // TODO: needs to be adapted to ggml_flash_attn_ext
     GGML_API struct ggml_tensor * ggml_flash_attn_back(
            struct ggml_context * ctx,
