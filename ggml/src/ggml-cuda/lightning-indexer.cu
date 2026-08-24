@@ -639,7 +639,7 @@ void ggml_cuda_lightning_indexer(ggml_backend_cuda_context & ctx, ggml_tensor * 
         // scalar kernel because the MFMA tiles take f16 operands.
         if (amd_mfma_available(cc) && k->type != GGML_TYPE_F32 && k->type != GGML_TYPE_BF16 &&
             !indexer_mfma_disabled()) {
-            constexpr int K_VECS_PER_BLOCK = 32;
+            constexpr int K_VECS_PER_BLOCK = 64;  // was 32; bigger kv tile halves redundant Q reloads (Q=16KB/block dominates)
             constexpr int WARPS_PER_BLOCK  = 4;   // one wavefront per 16-head tile
 
             dim3 block(64, WARPS_PER_BLOCK);
