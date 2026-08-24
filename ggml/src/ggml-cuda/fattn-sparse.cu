@@ -192,7 +192,14 @@ void ggml_cuda_flash_attn_ext_sparse(ggml_backend_cuda_context & ctx, ggml_tenso
     const int n_top_k  = top_k->ne[0];
 
     int nwaves = 1;
-    for (int g = 16; g >= 1; --g) {
+    // decode (n_q==1) wants LOW nwaves => more blocks for the single query; prefill wants
+    // high nwaves (max gather amortization across heads). n_q-aware.
+    int nwaves_cap = 16;
+    if (n_q == 1) {
+        nwaves_cap = 4;
+        const char * ed = getenv("GGML_DSV4_SPARSE_DECODE_NWAVES"); if (ed) { int v = atoi(ed); if (v >= 1 && v <= 16) nwaves_cap = v; }
+    }
+    for (int g = nwaves_cap; g >= 1; --g) {
         if (n_head % g == 0) { nwaves = g; break; }
     }
     const dim3 grid(n_q, (n_head + nwaves - 1)/nwaves, n_stream);

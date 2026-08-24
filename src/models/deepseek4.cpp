@@ -784,10 +784,11 @@ ggml_tensor * llama_model_deepseek4::graph::build_csa_lid_attention(
     // indices into flash-attn so each query attends only the raw window + its selected
     // csa keys. On ratio-4 layers csa >> top_k, so this skips most of the attention.
     static const bool dsv4_sparse_attn = (getenv("GGML_DSV4_SPARSE_ATTN") != nullptr);
+    static const bool dsv4_sparse_decode = (getenv("GGML_DSV4_SPARSE_DECODE") != nullptr);
     ggml_tensor * out;
-    // gather-sparse wins prefill but the n_q=1 decode kernel underutilizes the GPU;
-    // use it only for multi-token (prefill) batches, dense top-k mask for decode.
-    if (dsv4_sparse_attn && n_tokens > 1) {
+    // gather-sparse wins prefill; decode (n_q=1) underutilizes the GPU unless the kernel
+    // uses low NWAVES for more blocks -- gated behind GGML_DSV4_SPARSE_DECODE for testing.
+    if (dsv4_sparse_attn && (n_tokens > 1 || dsv4_sparse_decode)) {
         const int32_t n_raw = (int32_t) raw_mask->ne[0]; // dense prefix width in k_all
         ggml_tensor * kq_mask = ggml_concat(ctx0, raw_mask, inp_csa.kq_mask, 0); // causal masks, no top-k -inf
         cb(kq_mask, "csa_lid_kq_mask", il);
