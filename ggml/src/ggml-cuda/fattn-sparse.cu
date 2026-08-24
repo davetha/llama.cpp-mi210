@@ -32,6 +32,7 @@ flash_attn_sparse_kernel(
         const int32_t * __restrict__ top_k,
         float * __restrict__ dst,
         const float scale,
+        const int   diag,
         const int   n_kv,
         const int   n_top_k,
         const int   n_dense,
@@ -93,12 +94,17 @@ flash_attn_sparse_kernel(
         }
         __syncthreads();
 
-        // stage the tile's K rows into shared memory (coalesced, once for all heads)
-        for (int idx = threadIdx.x; idx < nt*D; idx += nthreads) {
-            const int kloc = idx / D;
-            const int d    = idx - kloc*D;
+        // stage the tile's K rows into shared memory as 128-bit (int4 = 8 half) loads:
+        // fewer global transactions on the scattered gather, which dominates the kernel.
+        static_assert(D % 8 == 0, "D must be a multiple of 8 for int4 staging");
+        constexpr int D8 = D / 8;
+        for (int idx = threadIdx.x; idx < nt*D8; idx += nthreads) {
+            const int kloc = idx / D8;
+            const int d8   = idx - kloc*D8;
             const int ic   = ic_sh[kloc];
-            ksh[kloc][d] = ic >= 0 ? ((const half *)(K + ic*nbk1 + seq*nbk3))[d] : __float2half(0.0f);
+            const int4 v = ic >= 0 ? *(const int4 *)((const char *)(K + ic*nbk1 + seq*nbk3) + d8*16)
+                                   : make_int4(0, 0, 0, 0);
+            *(int4 *)&ksh[kloc][d8*8] = v;
         }
         __syncthreads();
 
@@ -114,15 +120,17 @@ flash_attn_sparse_kernel(
                 for (int i = 0; i < DPT; ++i) {
                     partial += qreg[i] * __half2float(ksh[kloc][lane + i*WARP_SIZE]);
                 }
-                float s = warp_reduce_sum(partial)*scale + mv;
+                float s = (diag == 1 ? partial : warp_reduce_sum(partial))*scale + mv; // diag1: skip reduce (timing only)
 
                 const float m_new = fmaxf(m, s);
                 const float corr  = expf(m - m_new);
                 const float p     = expf(s - m_new);
                 l = l*corr + p;
+                if (diag != 2) { // diag2: skip PV accumulate (timing only)
 #pragma unroll
                 for (int i = 0; i < DPT; ++i) {
                     acc[i] = acc[i]*corr + p*__half2float(ksh[kloc][lane + i*WARP_SIZE]); // V aliases K
+                }
                 }
                 m = m_new;
             }
@@ -175,6 +183,7 @@ void ggml_cuda_flash_attn_ext_sparse(ggml_backend_cuda_context & ctx, ggml_tenso
     float scale = 1.0f;
     memcpy(&scale, (const float *) dst->op_params + 0, sizeof(float));
     const int n_dense = ((const int32_t *) dst->op_params)[4];
+    const int diag = []{ const char * e = getenv("GGML_DSV4_DIAG"); return e ? atoi(e) : 0; }();
 
     const int n_q      = Q->ne[1];
     const int n_head   = Q->ne[2];
@@ -203,7 +212,7 @@ void ggml_cuda_flash_attn_ext_sparse(ggml_backend_cuda_context & ctx, ggml_tenso
         constexpr int WW = decltype(w_tag)::value;
         constexpr int DPT = DD / WARP_SIZE;
         flash_attn_sparse_kernel<DD, DPT, WW, TK><<<grid, WW*WARP_SIZE, 0, stream>>>(
-            Qd, Kd, Md, Sd, Td, Dd, scale, n_kv, n_top_k, n_dense, n_head,
+            Qd, Kd, Md, Sd, Td, Dd, scale, diag, n_kv, n_top_k, n_dense, n_head,
             Q->nb[1], Q->nb[2], Q->nb[3],
             K->nb[1], K->nb[3],
             mask ? mask->nb[1] : 0, mask ? mask->nb[3] : 0,
