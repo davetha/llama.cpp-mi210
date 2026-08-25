@@ -1912,7 +1912,16 @@ void ggml_cuda_flash_attn_ext_mma_f16_case(ggml_backend_cuda_context & ctx, ggml
     const int warp_size_host = ggml_cuda_info().devices[ctx.device].warp_size;
     const int nwarps         = nthreads / warp_size_host;
 
-    constexpr bool V_is_K_view = DKQ == 576; // Guaranteed by the kernel selection logic in fattn.cu
+    // V_is_K_view: DKQ==576 is a guaranteed K-view (upstream dispatch). DKQ==512 is the
+    // DSV4-Flash HCA/dense MLA path where the graph passes the identical tensor as K and V;
+    // enable the K-tile reuse (skip redundant V load/store) only when V actually aliases K at
+    // runtime, so every other model keeps V_is_K_view=false (byte-identical to before).
+    const ggml_tensor * K_alias = dst->src[1];
+    const ggml_tensor * V_alias = dst->src[2];
+    const bool v_aliases_k = (V_alias == K_alias) ||
+        (V_alias->view_src && (V_alias->view_src == K_alias ||
+         (V_alias->view_src == K_alias->view_src && V_alias->view_offs == K_alias->view_offs)));
+    const bool V_is_K_view_rt = (DKQ == 576) || (DKQ == 512 && v_aliases_k);
 
     const size_t nbytes_shared_KV_1stage = nbatch_fa            * std::max(nbatch_K2 + 4,  nbatch_V2 + 4) * sizeof(half2);
     const size_t nbytes_shared_KV_2stage = nbatch_fa            *         (nbatch_K2 + 4 + nbatch_V2 + 4) * sizeof(half2);
@@ -1937,7 +1946,15 @@ void ggml_cuda_flash_attn_ext_mma_f16_case(ggml_backend_cuda_context & ctx, ggml
     fattn_kernel_t fattn_kernel;
     if (logit_softcap == 0.0f) {
         constexpr bool use_logit_softcap = false;
-        fattn_kernel = flash_attn_ext_f16<DKQ, DV, ncols1, ncols2, use_logit_softcap, V_is_K_view>;
+        if constexpr (DKQ == 576) {
+            fattn_kernel = flash_attn_ext_f16<DKQ, DV, ncols1, ncols2, use_logit_softcap, true>;
+        } else if constexpr (DKQ == 512) {
+            fattn_kernel = V_is_K_view_rt
+                ? flash_attn_ext_f16<DKQ, DV, ncols1, ncols2, use_logit_softcap, true>
+                : flash_attn_ext_f16<DKQ, DV, ncols1, ncols2, use_logit_softcap, false>;
+        } else {
+            fattn_kernel = flash_attn_ext_f16<DKQ, DV, ncols1, ncols2, use_logit_softcap, false>;
+        }
 
 #if !defined(GGML_USE_MUSA)
         static bool shared_memory_limit_raised[GGML_CUDA_MAX_DEVICES] = {false};
@@ -1948,7 +1965,15 @@ void ggml_cuda_flash_attn_ext_mma_f16_case(ggml_backend_cuda_context & ctx, ggml
 #endif // !defined(GGML_USE_MUSA)
     } else {
         constexpr bool use_logit_softcap = true;
-        fattn_kernel = flash_attn_ext_f16<DKQ, DV, ncols1, ncols2, use_logit_softcap, V_is_K_view>;
+        if constexpr (DKQ == 576) {
+            fattn_kernel = flash_attn_ext_f16<DKQ, DV, ncols1, ncols2, use_logit_softcap, true>;
+        } else if constexpr (DKQ == 512) {
+            fattn_kernel = V_is_K_view_rt
+                ? flash_attn_ext_f16<DKQ, DV, ncols1, ncols2, use_logit_softcap, true>
+                : flash_attn_ext_f16<DKQ, DV, ncols1, ncols2, use_logit_softcap, false>;
+        } else {
+            fattn_kernel = flash_attn_ext_f16<DKQ, DV, ncols1, ncols2, use_logit_softcap, false>;
+        }
 
 #if !defined(GGML_USE_MUSA)
         static bool shared_memory_limit_raised[GGML_CUDA_MAX_DEVICES] = {false};
