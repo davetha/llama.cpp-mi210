@@ -499,7 +499,7 @@ static best_fattn_kernel ggml_cuda_get_best_fattn_kernel(const int device, const
     }
 
     // AMD MFMA needs a certain minimum batch size to outscale the tile kernel for large head sizes.
-    if ((amd_mfma_available(cc) && Q->ne[0] <= 256) && Q->ne[0] != 40 && Q->ne[0] != 72) {
+    if ((amd_mfma_available(cc) && Q->ne[0] <= 576) && Q->ne[0] != 40 && Q->ne[0] != 72) {
         if ((Q->ne[0] <= 64 && Q->ne[1] * gqa_ratio_eff > 8)) {
             return BEST_FATTN_KERNEL_MMA_F16;
         }
@@ -507,6 +507,14 @@ static best_fattn_kernel ggml_cuda_get_best_fattn_kernel(const int device, const
             return BEST_FATTN_KERNEL_MMA_F16;
         }
         if ((Q->ne[0] <= 256 && Q->ne[1] * gqa_ratio_eff > 64)) {
+            return BEST_FATTN_KERNEL_MMA_F16;
+        }
+        // Head sizes above 256 (DeepSeek MLA: 512 and 576) have tuned CDNA entries in
+        // ggml_cuda_fattn_mma_get_config_cdna and compiled DKQ=512/576 instances, but the
+        // old <= 256 cap sent them to the tile kernel, which uses no matrix cores at all.
+        // Threshold matches the 256 case: with gqa_ratio_eff = 64 this admits prefill and
+        // leaves single-token decode on the vector path.
+        if ((Q->ne[0] <= 576 && Q->ne[1] * gqa_ratio_eff > 64)) {
             return BEST_FATTN_KERNEL_MMA_F16;
         }
     }
