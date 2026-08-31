@@ -48,6 +48,105 @@ static int next_power_of_2(int x) {
 
 #endif                            // CUB_TOP_K_AVAILABLE
 
+
+// MI210_TOPK_GPU: multi-pass block reduction so TOP_K stays on the GPU above
+// ncols 1024. See ggml_cuda_op_top_k below for why the CPU fallback is costly
+// out of proportion to its arithmetic.
+#define TOP_K_CHUNK 1024
+
+// One block reduces one (row, chunk) pair: sorts up to TOP_K_CHUNK values
+// descending and emits that chunk's top k_keep as (value, index) pairs.
+// idx_in is null on the first pass, where indices are just global positions.
+static __global__ void k_top_k_reduce(
+        const float * __restrict__ vals,
+        const int   * __restrict__ idx_in,
+        float       * __restrict__ vals_out,
+        int         * __restrict__ idx_out,
+        const int n_in, const int k_keep, const int n_out) {
+
+    const int tid   = threadIdx.x;
+    const int chunk = blockIdx.x;
+    const int row   = blockIdx.y;
+
+    __shared__ float sval[TOP_K_CHUNK];
+    __shared__ int   sidx[TOP_K_CHUNK];
+
+    const int g = chunk * TOP_K_CHUNK + tid;
+
+    if (g < n_in) {
+        sval[tid] = vals[(size_t) row * n_in + g];
+        sidx[tid] = idx_in ? idx_in[(size_t) row * n_in + g] : g;
+    } else {
+        // padding loses every comparison and can never reach the output while
+        // n >= k, which top-k requires anyway
+        sval[tid] = -INFINITY;
+        sidx[tid] = -1;
+    }
+    __syncthreads();
+
+    // bitonic sort, descending
+    for (int kk = 2; kk <= TOP_K_CHUNK; kk *= 2) {
+        for (int j = kk / 2; j > 0; j /= 2) {
+            const int ixj = tid ^ j;
+            if (ixj > tid) {
+                const bool up = (tid & kk) == 0;
+                if (up ? (sval[tid] < sval[ixj]) : (sval[tid] > sval[ixj])) {
+                    const float tv = sval[tid]; sval[tid] = sval[ixj]; sval[ixj] = tv;
+                    const int   ti = sidx[tid]; sidx[tid] = sidx[ixj]; sidx[ixj] = ti;
+                }
+            }
+            __syncthreads();
+        }
+    }
+
+    if (tid < k_keep) {
+        const int o = chunk * k_keep + tid;
+        if (o < n_out) {
+            if (vals_out) {
+                vals_out[(size_t) row * n_out + o] = sval[tid];
+            }
+            idx_out[(size_t) row * n_out + o] = sidx[tid];
+        }
+    }
+}
+
+static void top_k_multi_pass(ggml_cuda_pool & pool,
+                             const float * src, int * dst,
+                             const int ncols, const int nrows, const int k,
+                             cudaStream_t stream) {
+    const int nchunks0 = (ncols + TOP_K_CHUNK - 1) / TOP_K_CHUNK;
+    const size_t cap   = (size_t) nrows * nchunks0 * k;
+
+    ggml_cuda_pool_alloc<float> va(pool, cap), vb(pool, cap);
+    ggml_cuda_pool_alloc<int>   ia(pool, cap), ib(pool, cap);
+
+    const float * cur_v = src;
+    const int   * cur_i = nullptr;
+    int           cur_n = ncols;
+    int           parity = 0;
+
+    // reduce until a single chunk remains
+    while (cur_n > TOP_K_CHUNK) {
+        const int nch   = (cur_n + TOP_K_CHUNK - 1) / TOP_K_CHUNK;
+        const int n_out = nch * k;
+
+        float * ov = parity ? vb.get() : va.get();
+        int   * oi = parity ? ib.get() : ia.get();
+
+        const dim3 grid(nch, nrows);
+        k_top_k_reduce<<<grid, TOP_K_CHUNK, 0, stream>>>(cur_v, cur_i, ov, oi, cur_n, k, n_out);
+
+        cur_v  = ov;
+        cur_i  = oi;
+        cur_n  = n_out;
+        parity ^= 1;
+    }
+
+    // final pass writes indices straight into dst
+    const dim3 grid(1, nrows);
+    k_top_k_reduce<<<grid, TOP_K_CHUNK, 0, stream>>>(cur_v, cur_i, nullptr, dst, cur_n, k, k);
+}
+
 void ggml_cuda_op_top_k(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
     const ggml_tensor * src0   = dst->src[0];
     const float *       src0_d = (const float *) src0->data;
@@ -96,10 +195,17 @@ void ggml_cuda_op_top_k(ggml_backend_cuda_context & ctx, ggml_tensor * dst) {
         dst_d  += k     * iter_nrows;
     }
 #else                             // GGML_CUDA_USE_CUB
-    ggml_cuda_pool_alloc<int> temp_dst_alloc(pool, ncols * nrows);
-    int *                     tmp_dst = temp_dst_alloc.get();
-    argsort_f32_i32_cuda_bitonic(src0_d, tmp_dst, ncols, nrows, GGML_SORT_ORDER_DESC, stream);
-    CUDA_CHECK(cudaMemcpy2DAsync(dst_d, k * sizeof(int), tmp_dst, ncols * sizeof(int), k * sizeof(int), nrows,
-                                 cudaMemcpyDeviceToDevice, stream));
+    if (ncols > TOP_K_CHUNK) {
+        // MI210_TOPK_GPU: above the bitonic block limit, reduce chunk-wise on
+        // the GPU rather than letting the whole node fall back to the CPU.
+        GGML_ASSERT(2*k <= TOP_K_CHUNK);
+        top_k_multi_pass(pool, src0_d, dst_d, ncols, nrows, k, stream);
+    } else {
+        ggml_cuda_pool_alloc<int> temp_dst_alloc(pool, ncols * nrows);
+        int *                     tmp_dst = temp_dst_alloc.get();
+        argsort_f32_i32_cuda_bitonic(src0_d, tmp_dst, ncols, nrows, GGML_SORT_ORDER_DESC, stream);
+        CUDA_CHECK(cudaMemcpy2DAsync(dst_d, k * sizeof(int), tmp_dst, ncols * sizeof(int), k * sizeof(int), nrows,
+                                     cudaMemcpyDeviceToDevice, stream));
+    }
 #endif
 }

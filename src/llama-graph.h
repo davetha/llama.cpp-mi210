@@ -1138,7 +1138,9 @@ struct llm_graph_context {
             ggml_tensor * sinks,   // [n_head_q]
             ggml_tensor * v_mla,   // [n_embd_head_v_mla, n_embd_head_v, n_head_v]
                   float   kq_scale,
-                    int   il) const;
+                    int   il,
+            ggml_tensor * top_k = nullptr,   // DSV4 sparse: per-query top-k key indices (compressed suffix)
+            int32_t       n_dense = 0) const; // # leading keys attended densely (raw/SWA prefix)
 
     llm_graph_input_attn_no_cache * build_attn_inp_no_cache() const;
 

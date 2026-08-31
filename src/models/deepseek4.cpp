@@ -695,7 +695,10 @@ ggml_tensor * llama_model_deepseek4::graph::build_lid_top_k(
         cb(indexer_score, "lid_score_masked", il);
     }
 
-    const uint32_t n_top_k = indexer_score->ne[0] < hparams.indexer_top_k ? indexer_score->ne[0] : hparams.indexer_top_k;
+    uint32_t topk_cap = hparams.indexer_top_k;
+    static const char * dsv4_topk_env = getenv("GGML_DSV4_INDEXER_TOPK");
+    if (dsv4_topk_env) { int v = atoi(dsv4_topk_env); if (v > 0) topk_cap = (uint32_t) v; }
+    const uint32_t n_top_k = (uint32_t) indexer_score->ne[0] < topk_cap ? (uint32_t) indexer_score->ne[0] : topk_cap;
     ggml_tensor * top_k = ggml_cont(ctx0, ggml_top_k(ctx0, indexer_score, n_top_k));
     cb(top_k, "lid_top_k", il);
 
@@ -778,12 +781,27 @@ ggml_tensor * llama_model_deepseek4::graph::build_csa_lid_attention(
     cb(k_all, "csa_k_all", il);
 
     ggml_tensor * raw_mask = inp_attn->get_kq_mask();
-    ggml_tensor * csa_mask = build_top_k_mask(inp_csa.kq_mask, top_k, "csa_top_k_mask", il);
 
-    ggml_tensor * kq_mask = ggml_concat(ctx0, raw_mask, csa_mask, 0);
-    cb(kq_mask, "csa_lid_kq_mask", il);
-
-    ggml_tensor * out = build_attn_mha(q, k_all, k_all, nullptr, kq_mask, sinks, nullptr, kq_scale, il);
+    // DSV4 gather-sparse attention (env GGML_DSV4_SPARSE_ATTN): instead of masking the
+    // compressed csa keys to -inf (which still computes them densely), feed the top_k
+    // indices into flash-attn so each query attends only the raw window + its selected
+    // csa keys. On ratio-4 layers csa >> top_k, so this skips most of the attention.
+    static const bool dsv4_sparse_attn = (getenv("GGML_DSV4_SPARSE_ATTN") != nullptr);
+    static const bool dsv4_sparse_decode = (getenv("GGML_DSV4_SPARSE_DECODE") != nullptr);
+    ggml_tensor * out;
+    // gather-sparse wins prefill; decode (n_q=1) underutilizes the GPU unless the kernel
+    // uses low NWAVES for more blocks -- gated behind GGML_DSV4_SPARSE_DECODE for testing.
+    if (dsv4_sparse_attn && (n_tokens > 1 || dsv4_sparse_decode)) {
+        const int32_t n_raw = (int32_t) raw_mask->ne[0]; // dense prefix width in k_all
+        ggml_tensor * kq_mask = ggml_concat(ctx0, raw_mask, inp_csa.kq_mask, 0); // causal masks, no top-k -inf
+        cb(kq_mask, "csa_lid_kq_mask", il);
+        out = build_attn_mha(q, k_all, k_all, nullptr, kq_mask, sinks, nullptr, kq_scale, il, top_k, n_raw);
+    } else {
+        ggml_tensor * csa_mask = build_top_k_mask(inp_csa.kq_mask, top_k, "csa_top_k_mask", il);
+        ggml_tensor * kq_mask = ggml_concat(ctx0, raw_mask, csa_mask, 0);
+        cb(kq_mask, "csa_lid_kq_mask", il);
+        out = build_attn_mha(q, k_all, k_all, nullptr, kq_mask, sinks, nullptr, kq_scale, il);
+    }
     if (k_rot) {
         out = llama_mul_mat_hadamard(ctx0, out, k_rot);
     }

@@ -5209,6 +5209,16 @@ static bool ggml_backend_cuda_device_supports_op(ggml_backend_dev_t dev, const g
         case GGML_OP_SUM:
             return ggml_is_contiguous_rows(op->src[0]);
         case GGML_OP_TOP_K:
+#ifndef GGML_CUDA_USE_CUB
+            // MI210_TOPK_GPU: wide rows are handled by chunk-wise reduction,
+            // which needs 2*k <= 1024 so each pass at least halves the
+            // candidates. Falling back to the CPU here is expensive out of
+            // proportion to the op: it splits the graph and blocks multi-GPU
+            // pipelining entirely.
+            return op->src[0]->ne[0] <= 1024 || 2*op->ne[0] <= 1024;
+#else
+            return true;
+#endif
         case GGML_OP_ARGSORT:
 #ifndef GGML_CUDA_USE_CUB
             return op->src[0]->ne[0] <= 1024;

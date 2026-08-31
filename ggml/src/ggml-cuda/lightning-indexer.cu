@@ -2,6 +2,7 @@
 #include "lightning-indexer.cuh"
 #include "fattn-common.cuh"
 #include "convert.cuh"
+#include "mma.cuh"
 
 #if !defined(GGML_USE_HIP) && !defined(GGML_USE_MUSA)
 #if defined(TURING_MMA_AVAILABLE)
@@ -382,6 +383,174 @@ static __global__ void lightning_indexer_kernel_vec(
     }
 }
 
+
+static bool indexer_mfma_disabled() {
+    static const bool disabled = getenv("GGML_INDEXER_NO_MFMA") != nullptr;
+    return disabled;
+}
+
+// MI210_INDEXER_MFMA: matrix-core lightning indexer for CDNA.
+//
+// One wavefront owns one 16-head tile and sweeps every kv column in the block.
+// The per-head ReLU and weighting are deferred until after the GEMM, during the
+// reduction over heads, so the inner loop contains no cross-lane reduction at
+// all -- which is the specific thing that made the scalar path slow.
+template <int WARPS_PER_BLOCK, int K_VECS_PER_BLOCK, int64_t N_EMBD, int64_t N_HEAD, ggml_type TYPE_K>
+static __global__ void lightning_indexer_kernel_mfma(
+        const float * Q, const char * K, const float * W, const half * M, float * dst,
+        int64_t n_stream, int64_t n_batch, int64_t n_kv,
+        size_t nb1, size_t nb2, size_t nb3,
+        size_t nbq1, size_t nbq2, size_t nbq3,
+        size_t nbk1, size_t nbk2, size_t nbk3,
+        size_t nbw1, size_t nbw2, size_t nbw3,
+        size_t nbm1, size_t nbm2, size_t nbm3,
+        int64_t nem3
+    ) {
+#if defined(AMD_MFMA_AVAILABLE)
+    using namespace ggml_cuda_mma;
+
+    typedef tile<16,  8, half2> tile_qk;   // 16 rows x 16 halves
+    typedef tile<16, 16, float> tile_acc;
+
+    constexpr int MFMA_WAVE_SIZE    = 64;
+    constexpr int THREADS_PER_BLOCK = WARPS_PER_BLOCK * MFMA_WAVE_SIZE;
+
+    constexpr int HEAD_TILES = N_HEAD / 16;
+    constexpr int KV_TILES   = K_VECS_PER_BLOCK / 16;
+    constexpr int K_STEPS    = N_EMBD / 16;
+
+    static_assert(WARPS_PER_BLOCK == HEAD_TILES,  "one wavefront per 16-head tile");
+    static_assert(N_EMBD % 16 == 0,               "embedding must tile by 16");
+    static_assert(K_VECS_PER_BLOCK % 16 == 0,     "kv block must tile by 16");
+
+    // half2 columns per row. The +4 keeps consecutive rows off the same LDS
+    // banks; at a bare 64-half2 stride every row would start on bank 0.
+    constexpr int H2_STRIDE = N_EMBD/2 + 4;
+
+    const int i_batch  = blockIdx.y;
+    const int i_stream = blockIdx.z;
+    const int i_wave   = threadIdx.y;
+    const int tid      = i_wave * MFMA_WAVE_SIZE + threadIdx.x;
+
+    const int start_kv = blockIdx.x * K_VECS_PER_BLOCK;
+
+    const char  * q_base = (const char  *)                 Q + i_batch*nbq2 + i_stream*nbq3;
+    const float * w_base = (const float *) ((const char *) W + i_batch*nbw1 + i_stream*nbw3);
+
+    __shared__ float w_sh[N_HEAD];
+    __shared__ half2 q_sh[N_HEAD][H2_STRIDE];
+    __shared__ half2 k_sh[K_VECS_PER_BLOCK][H2_STRIDE];
+    __shared__ float qk_sh[N_HEAD][K_VECS_PER_BLOCK];
+
+    if (tid < N_HEAD) {
+        w_sh[tid] = w_base[tid];
+    }
+
+    // phase 1 - load the whole Q tile as half. It fits, so unlike the WMMA path
+    // there is no need to re-stream Q once per head group.
+    constexpr int n_q = N_HEAD * (N_EMBD/4);
+#pragma unroll
+    for (int i_q = tid; i_q < n_q; i_q += THREADS_PER_BLOCK) {
+        const int i_head = i_q / (N_EMBD/4);
+        const int i_e4   = i_q % (N_EMBD/4);
+        const float4 q = *(const float4 *) (q_base + i_head*nbq1 + i_e4*sizeof(float4));
+        q_sh[i_head][2*i_e4 + 0] = __float22half2_rn(make_float2(q.x, q.y));
+        q_sh[i_head][2*i_e4 + 1] = __float22half2_rn(make_float2(q.z, q.w));
+    }
+
+    // phase 2 - load (and dequantize if needed) K as half
+    constexpr int n_k = K_VECS_PER_BLOCK * (N_EMBD/4);
+
+    if constexpr (TYPE_K == GGML_TYPE_F16) {
+#pragma unroll
+        for (int i_k = tid; i_k < n_k; i_k += THREADS_PER_BLOCK) {
+            const int i_kvec = i_k / (N_EMBD/4);
+            const int i_e4   = i_k % (N_EMBD/4);
+            const int i_kv   = start_kv + i_kvec;
+            int2 v = make_int2(0, 0);
+            if (i_kv < n_kv) {
+                const int2 * k_base = (const int2 *) ((const char *) K + i_kv*nbk2 + i_stream*nbk3);
+                v = k_base[i_e4];
+            }
+            *(int2 *) &k_sh[i_kvec][2*i_e4] = v;
+        }
+    } else {
+        constexpr dequantize_V_t dequantize_k = get_dequantize_V<TYPE_K, half, 4>();
+#pragma unroll
+        for (int i_k = tid; i_k < n_k; i_k += THREADS_PER_BLOCK) {
+            const int i_kvec = i_k / (N_EMBD/4);
+            const int i_e4   = i_k % (N_EMBD/4);
+            const int i_kv   = start_kv + i_kvec;
+            if (i_kv < n_kv) {
+                const void * k_base = (const void *) ((const char *) K + i_kv*nbk2 + i_stream*nbk3);
+                dequantize_k(k_base, (half *) &k_sh[i_kvec][2*i_e4], i_e4 * 4);
+            } else {
+                *(int2 *) &k_sh[i_kvec][2*i_e4] = make_int2(0, 0);
+            }
+        }
+    }
+
+    __syncthreads();
+
+    // phase 3 - QK^T on the matrix cores. Both operands are stored row-major by
+    // their outer index and contract over the embedding, which is exactly the
+    // MFMA operand convention, so neither side needs transposing.
+#pragma unroll
+    for (int kvt = 0; kvt < KV_TILES; ++kvt) {
+        tile_acc acc;
+#pragma unroll
+        for (int l = 0; l < tile_acc::ne; ++l) {
+            acc.x[l] = 0.0f;
+        }
+
+#pragma unroll
+        for (int ks = 0; ks < K_STEPS; ++ks) {
+            tile_qk tq;
+            tile_qk tk;
+            load_generic(tq, &q_sh[i_wave*16][ks*8], H2_STRIDE);
+            load_generic(tk, &k_sh[kvt  *16][ks*8], H2_STRIDE);
+            // On CDNA the accumulator's i index follows the B operand rather
+            // than A -- fattn-mma-f16.cuh records the same asymmetry as "AMD
+            // matrix C is column-major", passing K as A where CUDA passes Q.
+            // So Q goes in as B to make acc come out as [head][kv].
+            mma(acc, tk, tq);
+        }
+
+#pragma unroll
+        for (int l = 0; l < tile_acc::ne; ++l) {
+            qk_sh[i_wave*16 + tile_acc::get_i(l)][kvt*16 + tile_acc::get_j(l)] = acc.x[l];
+        }
+    }
+
+    __syncthreads();
+
+    // phase 4 - ReLU, weight, reduce over heads, write out
+    if (tid < K_VECS_PER_BLOCK) {
+        const int i_kv = start_kv + tid;
+        if (i_kv < n_kv) {
+            float score = 0.0f;
+#pragma unroll
+            for (int i_head = 0; i_head < N_HEAD; ++i_head) {
+                const float v = qk_sh[i_head][tid];
+                score += (v > 0.0f ? v : 0.0f) * w_sh[i_head];
+            }
+            const half * m_base   = (const half  *) ((const char *) M   + i_batch*nbm1 + (i_stream%nem3)*nbm3);
+            float      * dst_base = (      float *) ((      char *) dst + i_batch*nb1  + i_stream*nb3);
+            dst_base[i_kv] = score + __half2float(m_base[i_kv]);
+        }
+    }
+#else
+    GGML_UNUSED_VARS(Q, K, W, M, dst,
+        n_stream, n_batch, n_kv,
+        nb1, nb2, nb3,
+        nbq1, nbq2, nbq3,
+        nbk1, nbk2, nbk3,
+        nbw1, nbw2, nbw3,
+        nem3);
+    NO_DEVICE_CODE;
+#endif // defined(AMD_MFMA_AVAILABLE)
+}
+
 #define LIGHTNING_INDEXER_CASE(lightning_indexer_kernel, n_embd, n_head, K, type_K)         \
     if (K->type == (type_K)) {                                                              \
         lightning_indexer_kernel<WARPS_PER_BLOCK, K_VECS_PER_BLOCK, n_embd, n_head, type_K> \
@@ -466,7 +635,25 @@ void ggml_cuda_lightning_indexer(ggml_backend_cuda_context & ctx, ggml_tensor * 
             GGML_ABORT("fatal error");
         } else {
 #else // !defined(GGML_USE_HIP) && !defined(GGML_USE_MUSA)
-        {
+        // MI210_INDEXER_MFMA: CDNA matrix-core path. F32 and BF16 K stay on the
+        // scalar kernel because the MFMA tiles take f16 operands.
+        if (amd_mfma_available(cc) && k->type != GGML_TYPE_F32 && k->type != GGML_TYPE_BF16 &&
+            !indexer_mfma_disabled()) {
+            constexpr int K_VECS_PER_BLOCK = 64;  // was 32; bigger kv tile halves redundant Q reloads (Q=16KB/block dominates)
+            constexpr int WARPS_PER_BLOCK  = 4;   // one wavefront per 16-head tile
+
+            dim3 block(64, WARPS_PER_BLOCK);
+            int num_kv_blocks = (n_kv + (K_VECS_PER_BLOCK) - 1) / (K_VECS_PER_BLOCK);
+            dim3 grid(num_kv_blocks, n_batch, n_stream);
+
+            LIGHTNING_INDEXER_CASE(lightning_indexer_kernel_mfma, 128, 64, k, GGML_TYPE_F16)
+            LIGHTNING_INDEXER_CASE(lightning_indexer_kernel_mfma, 128, 64, k, GGML_TYPE_Q4_0)
+            LIGHTNING_INDEXER_CASE(lightning_indexer_kernel_mfma, 128, 64, k, GGML_TYPE_Q4_1)
+            LIGHTNING_INDEXER_CASE(lightning_indexer_kernel_mfma, 128, 64, k, GGML_TYPE_Q5_0)
+            LIGHTNING_INDEXER_CASE(lightning_indexer_kernel_mfma, 128, 64, k, GGML_TYPE_Q5_1)
+            LIGHTNING_INDEXER_CASE(lightning_indexer_kernel_mfma, 128, 64, k, GGML_TYPE_Q8_0)
+            GGML_ABORT("fatal error");
+        } else {
 #endif // !defined(GGML_USE_HIP) && !defined(GGML_USE_MUSA)
             // use vector kernel
             constexpr int K_VECS_PER_WARP = 8;

@@ -8478,6 +8478,7 @@ static void ggml_compute_forward_flash_attn_ext_f16_one_chunk(
     const ggml_tensor * v     = dst->src[2];
     const ggml_tensor * mask  = dst->src[3];
     const ggml_tensor * sinks = dst->src[4];
+    const ggml_tensor * top_k = dst->src[5]; // DSV4 sparse: per-query top-k key indices (I32) or NULL
 
     GGML_TENSOR_LOCALS(int64_t, neq, q,   ne)
     GGML_TENSOR_LOCALS(size_t,  nbq, q,   nb)
@@ -8491,6 +8492,14 @@ static void ggml_compute_forward_flash_attn_ext_f16_one_chunk(
     const int64_t DK = nek0;
     const int64_t DV = nev0;
     const int64_t N  = neq1;
+
+    // DSV4 sparse attention: attend a dense prefix [0,n_dense) (raw/SWA window) then gather
+    // this query's top-k keys from the compressed suffix (indices into [0, nek1-n_dense)).
+    const int64_t n_top_k  = top_k ? top_k->ne[0] : 0;
+    const size_t  nbtk1    = top_k ? top_k->nb[1] : 0; // stride per query token
+    const size_t  nbtk3    = top_k ? top_k->nb[3] : 0; // stride per stream
+    const int64_t n_dense  = top_k ? (int64_t)((const int32_t *) dst->op_params)[4] : 0;
+    const int64_t n_sparse = top_k ? (nek1 - n_dense) : 0; // # compressed keys (suffix width)
 
     GGML_ASSERT(ne0 == DV);
     GGML_ASSERT(ne2 == N);
@@ -8589,7 +8598,24 @@ static void ggml_compute_forward_flash_attn_ext_f16_one_chunk(
         // loop over n_kv and n_head_kv
         // ref: https://arxiv.org/pdf/2112.05682.pdf
 
-        for (int64_t ic = ic_start; ic < ic_end; ++ic) {
+        // DSV4 sparse: iterate this query's gathered top-k key indices; else full KV range.
+        const int32_t * topk_row = top_k ? (const int32_t *)((const char *) top_k->data + iq1*nbtk1 + iq3*nbtk3) : NULL;
+        // [0, n_dense) attended densely (raw/SWA prefix); then n_top_k gathered compressed keys.
+        const int64_t kv_beg = top_k ? 0 : ic_start;
+        const int64_t kv_end = top_k ? (n_dense + n_top_k) : ic_end;
+        for (int64_t kk = kv_beg; kk < kv_end; ++kk) {
+            int64_t ic;
+            if (!top_k) {
+                ic = kk;
+            } else if (kk < n_dense) {
+                ic = kk;                                  // dense prefix key
+            } else {
+                const int64_t csa = (int64_t) topk_row[kk - n_dense];
+                if (csa < 0 || csa >= n_sparse) {
+                    continue;                             // padding / out-of-range compressed index
+                }
+                ic = n_dense + csa;                       // gathered compressed key
+            }
             const float mv = mp ? slope*GGML_CPU_FP16_TO_FP32(mp[ic]) : 0.0f;
             if (mv == -INFINITY) {
                 continue;
@@ -9112,7 +9138,9 @@ static void ggml_compute_forward_flash_attn_ext_f16(
     const bool use_ref = params->use_ref;
 
     const bool kv_is_f32_or_f16 = (k->type == GGML_TYPE_F32 || k->type == GGML_TYPE_F16);
-    const bool use_split_kv_path = !use_ref && (neq1 == 1 && neq3 == 1) && kv_is_f32_or_f16 && (k->type == v->type) && q->type == GGML_TYPE_F32 && nek1 >= 512;
+    // DSV4 sparse (top_k / src[5]) must use the plain per-query gather path.
+    const bool has_top_k = dst->src[5] != nullptr;
+    const bool use_split_kv_path = !use_ref && !has_top_k && (neq1 == 1 && neq3 == 1) && kv_is_f32_or_f16 && (k->type == v->type) && q->type == GGML_TYPE_F32 && nek1 >= 512;
 
     if (use_split_kv_path) {
         const int64_t chunk_size = (nek1 + nth - 1) / nth;
@@ -9169,7 +9197,7 @@ static void ggml_compute_forward_flash_attn_ext_f16(
         const int64_t dr = (nr + nchunk - 1) / nchunk;
 
         static constexpr int64_t Q_TILE_SZ  = ggml_fa_tile_config::Q;
-        bool use_tiled = !use_ref &&
+        bool use_tiled = !use_ref && !has_top_k &&
                                (q->type == GGML_TYPE_F32 &&
                                 kv_is_f32_or_f16 &&
                                 k->type == v->type &&
