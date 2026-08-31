@@ -22,7 +22,7 @@
 #include "fattn-sparse.cuh"
 #include <type_traits>
 
-template <int D, int DPT, int NWAVES, int TK>
+template <int D, int DPT, int NWAVES, int TK, bool KV_Q8>
 static __global__ void __launch_bounds__(NWAVES*WARP_SIZE)
 flash_attn_sparse_kernel(
         const char * __restrict__ Q,
@@ -96,15 +96,43 @@ flash_attn_sparse_kernel(
 
         // stage the tile's K rows into shared memory as 128-bit (int4 = 8 half) loads:
         // fewer global transactions on the scattered gather, which dominates the kernel.
-        static_assert(D % 8 == 0, "D must be a multiple of 8 for int4 staging");
-        constexpr int D8 = D / 8;
-        for (int idx = threadIdx.x; idx < nt*D8; idx += nthreads) {
-            const int kloc = idx / D8;
-            const int d8   = idx - kloc*D8;
-            const int ic   = ic_sh[kloc];
-            const int4 v = ic >= 0 ? *(const int4 *)((const char *)(K + ic*nbk1 + seq*nbk3) + d8*16)
-                                   : make_int4(0, 0, 0, 0);
-            *(int4 *)&ksh[kloc][d8*8] = v;
+        if constexpr (KV_Q8) {
+            // q8_0 KV: dequantize into the SAME f16 shared tile, so every downstream
+            // consumer (QK dot and the PV accumulate that aliases V onto K) is
+            // unchanged. Global traffic drops from 2 B/elem to ~1.06 B/elem, and this
+            // kernel is gather/latency bound, so the smaller gather is the point.
+            static_assert(D % QK8_0 == 0, "D must be a multiple of QK8_0");
+            constexpr int NB = D / QK8_0;
+            for (int idx = threadIdx.x; idx < nt*NB; idx += nthreads) {
+                const int kloc = idx / NB;
+                const int b    = idx - kloc*NB;
+                const int ic   = ic_sh[kloc];
+                if (ic >= 0) {
+                    const block_q8_0 * blk =
+                        (const block_q8_0 *)((const char *) K + ic*nbk1 + seq*nbk3) + b;
+                    const float d = __half2float(blk->d);
+#pragma unroll
+                    for (int j = 0; j < QK8_0; ++j) {
+                        ksh[kloc][b*QK8_0 + j] = __float2half(d * (float) blk->qs[j]);
+                    }
+                } else {
+#pragma unroll
+                    for (int j = 0; j < QK8_0; ++j) {
+                        ksh[kloc][b*QK8_0 + j] = __float2half(0.0f);
+                    }
+                }
+            }
+        } else {
+            static_assert(D % 8 == 0, "D must be a multiple of 8 for int4 staging");
+            constexpr int D8 = D / 8;
+            for (int idx = threadIdx.x; idx < nt*D8; idx += nthreads) {
+                const int kloc = idx / D8;
+                const int d8   = idx - kloc*D8;
+                const int ic   = ic_sh[kloc];
+                const int4 v = ic >= 0 ? *(const int4 *)((const char *)(K + ic*nbk1 + seq*nbk3) + d8*16)
+                                       : make_int4(0, 0, 0, 0);
+                *(int4 *)&ksh[kloc][d8*8] = v;
+            }
         }
         __syncthreads();
 
@@ -172,8 +200,10 @@ void ggml_cuda_flash_attn_ext_sparse(ggml_backend_cuda_context & ctx, ggml_tenso
 
     GGML_ASSERT(top_k && top_k->type == GGML_TYPE_I32);
     GGML_ASSERT(Q->type == GGML_TYPE_F32);
-    GGML_ASSERT(K->type == GGML_TYPE_F16 && V->type == GGML_TYPE_F16);
+    GGML_ASSERT((K->type == GGML_TYPE_F16  && V->type == GGML_TYPE_F16) ||
+                (K->type == GGML_TYPE_Q8_0 && V->type == GGML_TYPE_Q8_0));
     GGML_ASSERT(V->data == K->data && "sparse kernel requires MLA V aliasing K");
+    const bool kv_q8 = (K->type == GGML_TYPE_Q8_0);
     GGML_ASSERT(!mask || mask->type == GGML_TYPE_F16);
     GGML_ASSERT(dst->type == GGML_TYPE_F32);
 
@@ -218,7 +248,17 @@ void ggml_cuda_flash_attn_ext_sparse(ggml_backend_cuda_context & ctx, ggml_tenso
         constexpr int DD = decltype(d_tag)::value;
         constexpr int WW = decltype(w_tag)::value;
         constexpr int DPT = DD / WARP_SIZE;
-        flash_attn_sparse_kernel<DD, DPT, WW, TK><<<grid, WW*WARP_SIZE, 0, stream>>>(
+        if (kv_q8) {
+            flash_attn_sparse_kernel<DD, DPT, WW, TK, true><<<grid, WW*WARP_SIZE, 0, stream>>>(
+                Qd, Kd, Md, Sd, Td, Dd, scale, diag, n_kv, n_top_k, n_dense, n_head,
+                Q->nb[1], Q->nb[2], Q->nb[3],
+                K->nb[1], K->nb[3],
+                mask ? mask->nb[1] : 0, mask ? mask->nb[3] : 0,
+                top_k->nb[1], top_k->nb[3],
+                dst->nb[1], dst->nb[2], dst->nb[3]);
+            return;
+        }
+        flash_attn_sparse_kernel<DD, DPT, WW, TK, false><<<grid, WW*WARP_SIZE, 0, stream>>>(
             Qd, Kd, Md, Sd, Td, Dd, scale, diag, n_kv, n_top_k, n_dense, n_head,
             Q->nb[1], Q->nb[2], Q->nb[3],
             K->nb[1], K->nb[3],
@@ -252,7 +292,9 @@ bool ggml_cuda_flash_attn_ext_sparse_supported(const ggml_tensor * dst) {
     const ggml_tensor * top_k = dst->src[5];
     if (!top_k || top_k->type != GGML_TYPE_I32) return false;
     if (Q->type != GGML_TYPE_F32) return false;
-    if (K->type != GGML_TYPE_F16 || V->type != GGML_TYPE_F16) return false;
+    const bool kv_f16 = (K->type == GGML_TYPE_F16  && V->type == GGML_TYPE_F16);
+    const bool kv_q8  = (K->type == GGML_TYPE_Q8_0 && V->type == GGML_TYPE_Q8_0);
+    if (!kv_f16 && !kv_q8) return false;
     if (V->data != K->data) return false;      // require MLA V aliasing K
     if (dst->type != GGML_TYPE_F32) return false;
     const int D = Q->ne[0];
